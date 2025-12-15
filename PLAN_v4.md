@@ -258,3 +258,40 @@ If benchmarks fail (e.g., SVD <90% consistency):
 - **Auto-Shutdown**: RunPod API call to terminate idle pods after 5min
 
 **This plan locks direction. Changes only if benchmarks fail. Roll or $10K/mo stays trash.**
+
+---
+
+## Week 2 Force-Push Log
+
+**Date**: December 14, 2025  
+**Action**: Force-pushed Week 2 changes to `main` branch (unrelated histories resolved)
+
+**Changes Pushed**:
+- ✅ ElevenLabs audio engine (`lib/audio_engine.ts`) - Turbo wrapper $0.15-0.20/min
+- ✅ FFmpeg render engine (`lib/render_engine.ts`) - Stitch + social clips
+- ✅ BullMQ queue system (`jobs/` folder) - Redis async job processing
+- ✅ Pod manager (`lib/pod-manager.ts`) - RunPod/Vast.ai autoscaling + 5min idle shutdown
+- ✅ Billing system (`lib/billing.ts`) - Stripe caps/webhooks + minute deduction
+- ✅ Clerk auth middleware (`middleware.ts`) - Protected routes + rate limits (10/min)
+- ✅ Progress bar (`components/workspace/ProgressBar.tsx`) - Real-time polling + mobile z-index: 50 sticky
+- ✅ ClerkProvider setup (`components/providers/ClientProviders.tsx`)
+
+**Git Status**:
+- Branch: `main` (created from `main-clean`)
+- Commit: `7744caa6 feat(week3): Polish + IP-Adapter + test utils + launch prep`
+- Force push: Required (unrelated histories - remote main had old workspace refactor)
+- Remote: `origin/main` updated successfully
+
+**Secrets Setup**:
+- ✅ Created `.env.local` with placeholder secrets (never committed)
+- Placeholders for: Clerk, ElevenLabs, RunPod/Vast.ai, Stripe, Redis, Groq
+
+**Operational Test Status**: PENDING
+- Manual test flow: `pnpm dev` → Clerk login → create episode → render → verify queue/pod/progress/credits/auth
+- Test log placeholder: [Run 3-5 test renders after adding real keys - log: ep time, COGS, consistency %, errors]
+
+**Next Steps**:
+1. Add real API keys (Clerk/Redis free tiers, Eleven Starter $5/mo, RunPod $50 preload)
+2. Run 3-5 test renders (<$10 total)
+3. Log outputs: ep time <60s target, COGS <$1.60, consistency %
+4. Debug/fix if consistency <90% → add IP-Adapter
