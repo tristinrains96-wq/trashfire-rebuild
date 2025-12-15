@@ -28,7 +28,7 @@ export default function TopBar() {
   }
 
   return (
-    <div className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0a0f15]/95 backdrop-blur-xl" style={{ position: 'relative', zIndex: 10 }}>
+    <div className="sticky top-0 z-50 w-full border-b border-white/10 bg-[#0a0f15]/95 backdrop-blur-xl" style={{ position: 'sticky', zIndex: 50 }}>
       <div className="container flex h-14 max-w-screen-2xl items-center px-6">
         <div className="mr-4 flex">
           <Link href="/" className="mr-6 flex items-center space-x-2">

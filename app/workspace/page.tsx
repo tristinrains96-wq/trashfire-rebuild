@@ -62,8 +62,13 @@ const NewProjectModal = dynamic(() => import('@/components/workspace/NewProjectM
   ssr: false
 })
 
+const ProgressBar = dynamic(() => import('@/components/workspace/ProgressBar'), {
+  ssr: false
+})
+
 function WorkspaceContent() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
+  const [activeRender, setActiveRender] = useState<{ episodeId: string; jobId: string } | null>(null)
   const { isAuthenticated } = useAuth()
   const router = useRouter()
 
@@ -120,6 +125,23 @@ function WorkspaceContent() {
               <div className="flex-1 min-h-0">
                 <WorkspaceCanvas />
               </div>
+              {/* Progress Bar for active renders */}
+              {activeRender && (
+                <div className="mt-4">
+                  <ProgressBar
+                    episodeId={activeRender.episodeId}
+                    jobId={activeRender.jobId}
+                    onComplete={(result) => {
+                      console.log('Render complete:', result)
+                      setActiveRender(null)
+                    }}
+                    onError={(error) => {
+                      console.error('Render error:', error)
+                      setActiveRender(null)
+                    }}
+                  />
+                </div>
+              )}
             </div>
           }
         />

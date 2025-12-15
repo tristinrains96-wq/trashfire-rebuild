@@ -1,24 +1,46 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
 // Protected routes that require authentication
 const protectedRoutes = ['/workspace', '/dashboard', '/settings']
 
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
-  
-  // Check if the route is protected
-  const isProtectedRoute = protectedRoutes.some(route => 
-    pathname.startsWith(route)
-  )
+// Protected API routes (generation endpoints)
+const protectedApiRoutes = [
+  '/api/outline',
+  '/api/pipeline',
+  '/api/episodes',
+]
 
-  // For now, we'll let the client-side handle auth checks
-  // In production, you'd check for auth tokens/cookies here
-  // This is a simple middleware that just passes through
-  // The actual auth check happens in the page components
-  
+const isProtectedRoute = createRouteMatcher(protectedRoutes)
+const isProtectedApiRoute = createRouteMatcher(protectedApiRoutes)
+
+export default clerkMiddleware(async (auth, request: NextRequest) => {
+  const { pathname } = request.nextUrl
+
+  // Protect page routes
+  if (isProtectedRoute(request)) {
+    const { userId } = await auth()
+    if (!userId) {
+      const signInUrl = new URL('/login', request.url)
+      signInUrl.searchParams.set('redirect', pathname)
+      return NextResponse.redirect(signInUrl)
+    }
+  }
+
+  // Protect API routes (generation endpoints)
+  if (isProtectedApiRoute(request)) {
+    const { userId } = await auth()
+    if (!userId) {
+      return NextResponse.json(
+        { error: 'Unauthorized: Authentication required' },
+        { status: 401 }
+      )
+    }
+  }
+
   return NextResponse.next()
-}
+})
 
 export const config = {
   matcher: [

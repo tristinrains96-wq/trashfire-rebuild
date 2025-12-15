@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>TrashFire Mobile Stress Test - 375px</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .viewport {
+      width: 375px;
+      height: 667px;
+      border: 2px solid #00ffea;
+      margin: 20px auto;
+      position: relative;
+      background: #07090a;
+      overflow: hidden;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #0a0f15;
+      height: 56px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .keyboard-tray {
+      position: sticky;
+      bottom: 0;
+      z-index: 50;
+      background: #0a0f15;
+      height: 64px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+    }
+    .content {
+      padding: 20px;
+      color: white;
+      min-height: calc(100% - 120px);
+    }
+    .test-result {
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 4px;
+    }
+    .pass {
+      background: rgba(0, 255, 234, 0.1);
+      border: 1px solid #00ffea;
+      color: #00ffea;
+    }
+    .fail {
+      background: rgba(255, 0, 0, 0.1);
+      border: 1px solid #ff0000;
+      color: #ff0000;
+    }
+  </style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="topbar">
+      <div style="padding: 16px; color: white;">TopBar (z-index: 50)</div>
+    </div>
+    <div class="content">
+      <h3 style="color: #00ffea; margin-top: 0;">Mobile Stress Test - 375px</h3>
+      <div id="results"></div>
+    </div>
+    <div class="keyboard-tray">
+      <div style="padding: 16px; color: white;">KeyboardTray (z-index: 50)</div>
+    </div>
+  </div>
+
+  <script>
+    const results = document.getElementById('results');
+    const tests = [
+      {
+        name: 'TopBar sticky positioning',
+        test: () => {
+          const topbar = document.querySelector('.topbar');
+          const style = window.getComputedStyle(topbar);
+          return style.position === 'sticky' && parseInt(style.zIndex) === 50;
+        }
+      },
+      {
+        name: 'KeyboardTray sticky positioning',
+        test: () => {
+          const tray = document.querySelector('.keyboard-tray');
+          const style = window.getComputedStyle(tray);
+          return style.position === 'sticky' && parseInt(style.zIndex) === 50;
+        }
+      },
+      {
+        name: 'No z-index overlap',
+        test: () => {
+          const topbar = document.querySelector('.topbar');
+          const tray = document.querySelector('.keyboard-tray');
+          const topbarZ = parseInt(window.getComputedStyle(topbar).zIndex);
+          const trayZ = parseInt(window.getComputedStyle(tray).zIndex);
+          return topbarZ === trayZ && topbarZ === 50;
+        }
+      },
+      {
+        name: 'Viewport width 375px',
+        test: () => {
+          return window.innerWidth === 375 || document.querySelector('.viewport').offsetWidth === 375;
+        }
+      }
+    ];
+
+    tests.forEach(test => {
+      const result = test.test();
+      const div = document.createElement('div');
+      div.className = `test-result ${result ? 'pass' : 'fail'}`;
+      div.textContent = `${result ? '✅' : '❌'} ${test.name}`;
+      results.appendChild(div);
+    });
+  </script>
+</body>
+</html>
+

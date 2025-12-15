@@ -141,7 +141,7 @@ export default function KeyboardTray({ onAssist }: KeyboardTrayProps) {
   return (
     <>
       {/* Main Input Tray */}
-      <div className="w-full" style={{ position: 'relative', zIndex: 10 }}>
+      <div className="w-full" style={{ position: 'sticky', zIndex: 50 }}>
         <div className="flex h-16 items-center gap-3">
           {/* Upload Button */}
           <Button

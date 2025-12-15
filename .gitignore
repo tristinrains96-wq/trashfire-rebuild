@@ -41,3 +41,14 @@ next-env.d.ts
 
 # OS
 Thumbs.db
+
+# Cursor IDE
+.cursor/
+
+# System files
+AppData/
+.ollama/
+.lesshst
+
+# Test results
+stress_test_week3_*.json
