@@ -11,7 +11,7 @@ TrashFire is a professional, affordable, and profitable production app for creat
 - **Grok-Style Chat Interface**: Natural language script generation with context awareness
 - **Long-Form Content**: 5–15 minute episodes with full series continuity
 - **Easiest Controls**: Chat → Auto-Assets → Tweak → Render workflow
-- **Powerful Backend**: SDXL/AnimateDiff on RunPod GPU infrastructure
+- **Cloud Backend**: Groq LLM, RunPod/Vast.ai SVD video, ElevenLabs TTS
 - **Production Standards**: 99.9% uptime, <5s response times, 85% consistency
 
 ### Production Goals
@@ -26,7 +26,7 @@ TrashFire is a professional, affordable, and profitable production app for creat
 - **Cinematic UI**: Neon teal-on-black theme with glowing accents (#00ffea)
 - **Workspace Shell**: Complete workspace interface with panels for Characters, Backgrounds, Voices, Scenes, Music, and Episode management
 - **Responsive Design**: Optimized for desktop (≥1440×900) and mobile (390×844)
-- **Quality Presets**: LOW (720p/24fps local) and HIGH (1080p/30fps RunPod) modes
+- **Quality Presets**: LOW (720p/24fps) and HIGH (1080p/30fps) cloud rendering modes
 - **Billing Integration**: Stripe-ready with disabled/mock/live modes
 - **Interactive Components**: Built with shadcn/ui components and Framer Motion animations
 - **Modern Stack**: Next.js 14 App Router, TypeScript, Tailwind CSS
@@ -151,6 +151,10 @@ The application includes a health check endpoint at `/healthz` that returns:
   "services": ["web"]
 }
 ```
+
+## Cloud Pivot
+
+**Cloud Stack**: Groq LLM, RunPod/Vast.ai SVD video, ElevenLabs TTS. See [PLAN_v4.md](./PLAN_v4.md) for details.
 
 ## Production Plan
 
