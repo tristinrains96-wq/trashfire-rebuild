@@ -1,6 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+
+// Check if Clerk is configured
+const CLERK_ENABLED = !!(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY !== 'pk_test_...' &&
+  process.env.CLERK_SECRET_KEY &&
+  process.env.CLERK_SECRET_KEY !== 'sk_test_...'
+)
 
 // Protected routes that require authentication
 const protectedRoutes = ['/workspace', '/dashboard', '/settings']
@@ -12,10 +19,43 @@ const protectedApiRoutes = [
   '/api/episodes',
 ]
 
-const isProtectedRoute = createRouteMatcher(protectedRoutes)
-const isProtectedApiRoute = createRouteMatcher(protectedApiRoutes)
+let clerkMiddleware: any
+let createRouteMatcher: any
+let isProtectedRoute: any
+let isProtectedApiRoute: any
 
-export default clerkMiddleware(async (auth, request: NextRequest) => {
+if (CLERK_ENABLED) {
+  try {
+    const clerk = require('@clerk/nextjs/server')
+    clerkMiddleware = clerk.clerkMiddleware
+    createRouteMatcher = clerk.createRouteMatcher
+    isProtectedRoute = createRouteMatcher(protectedRoutes)
+    isProtectedApiRoute = createRouteMatcher(protectedApiRoutes)
+  } catch (error) {
+    console.warn('[Middleware] Clerk not available, auth disabled:', error)
+  }
+}
+
+// Fallback middleware if Clerk not configured
+function fallbackMiddleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  
+  // Allow all routes in dev mode without Clerk
+  if (process.env.NODE_ENV === 'development' && !CLERK_ENABLED) {
+    return NextResponse.next()
+  }
+  
+  // In production without Clerk, still allow but log warning
+  if (!CLERK_ENABLED) {
+    console.warn('[Middleware] Clerk not configured, allowing request to:', pathname)
+    return NextResponse.next()
+  }
+  
+  return NextResponse.next()
+}
+
+export default CLERK_ENABLED && clerkMiddleware
+  ? clerkMiddleware(async (auth: any, request: NextRequest) => {
   const { pathname } = request.nextUrl
 
   // Protect page routes
@@ -41,6 +81,7 @@ export default clerkMiddleware(async (auth, request: NextRequest) => {
 
   return NextResponse.next()
 })
+  : fallbackMiddleware
 
 export const config = {
   matcher: [

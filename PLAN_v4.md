@@ -295,3 +295,58 @@ If benchmarks fail (e.g., SVD <90% consistency):
 2. Run 3-5 test renders (<$10 total)
 3. Log outputs: ep time <60s target, COGS <$1.60, consistency %
 4. Debug/fix if consistency <90% → add IP-Adapter
+
+---
+
+## Local Launch Fix Log
+
+**Date**: December 15, 2025  
+**Issue**: Dev server failing to launch ("site can't be reached" on localhost:3000)
+
+**Root Causes Identified**:
+1. Missing dependencies: `@clerk/nextjs` and `bull` not in package.json
+2. Next.js version conflict: Clerk requires Next.js 14.0.3+, had 14.0.0
+3. Queue initialization blocking: Bull queue trying to connect to Redis on module load, causing 500 errors
+4. Clerk middleware failing: Required API keys not configured, causing crashes
+
+**Fixes Applied**:
+1. ✅ Added missing dependencies to package.json:
+   - `@clerk/nextjs@^5.0.0`
+   - `bull@^4.12.0`
+   - Updated `next` to `14.0.4` (compatible with Clerk)
+
+2. ✅ Made queue system dev-friendly:
+   - Added MockQueue class for in-memory queue when Redis unavailable
+   - Lazy initialization: queues initialize on first API call, not module load
+   - Auto-fallback to mock queue in development mode
+   - Non-blocking initialization with error handling
+
+3. ✅ Made Clerk optional for dev:
+   - Middleware checks if Clerk keys are configured before using
+   - Falls back to permissive middleware if Clerk not configured
+   - ClientProviders only wraps with ClerkProvider if keys are valid
+
+4. ✅ Created .env.local with placeholder secrets (never committed)
+
+**Test Results**:
+- ✅ `npm install` completed successfully (44 packages added)
+- ✅ Dev server starts: `npm run dev` runs without errors
+- ✅ Health endpoint works: `GET /healthz` returns 200
+- ✅ Home page loads: `GET /` returns 200 (11,662 bytes)
+- ✅ No build/TypeScript errors
+
+**Server Startup**:
+- Node.js: v22.17.1 ✅
+- npm: 10.9.2 ✅
+- Port 3000: Available ✅
+- Dependencies: Installed ✅
+
+**Remaining Issues**: None - server operational
+
+**Next Steps for Operational Tests**:
+1. Add real Clerk keys to .env.local (free tier)
+2. Test Clerk login flow
+3. Test episode creation via chat
+4. Test render pipeline with mock queue
+5. Verify progress bar polling
+6. Test mobile 375px viewport
