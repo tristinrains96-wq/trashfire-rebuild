@@ -58,9 +58,20 @@ stress_test_week3_*.json
 
 # TrashFire specific
 # Binary files and archives
-tools/ffmpeg/**/*.exe
-tools/ffmpeg/**/*.dll
+tools/
 **/*.zip
 **/*.7z
-**/*.tar.gz
 **/*.rar
+**/*.tar
+**/*.gz
+**/*.exe
+**/*.dll
+**/*.bin
+**/*.mp4
+**/*.mov
+**/*.webm
+**/*.pth
+**/*.safetensors
+**/*.ckpt
+dist/
+build/
