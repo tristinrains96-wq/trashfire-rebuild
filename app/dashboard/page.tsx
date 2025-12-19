@@ -13,6 +13,15 @@ import { useAuth } from '@/store/auth'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 
+// Check if Clerk is enabled to determine correct sign-in URL
+const CLERK_ENABLED = !!(
+  typeof window !== 'undefined' &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY !== 'pk_test_...'
+)
+
+const getSignInUrl = () => CLERK_ENABLED ? '/sign-in' : '/login'
+
 // Mock projects data
 const mockProjects = [
   {
@@ -73,7 +82,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login')
+      router.push(getSignInUrl())
     }
   }, [isAuthenticated, router])
 

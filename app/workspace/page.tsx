@@ -8,6 +8,15 @@ import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/store/auth'
 
+// Check if Clerk is enabled to determine correct sign-in URL
+const CLERK_ENABLED = !!(
+  typeof window !== 'undefined' &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY !== 'pk_test_...'
+)
+
+const getSignInUrl = () => CLERK_ENABLED ? '/sign-in' : '/login'
+
 // Dynamic import for loading component to avoid SSR issues
 const WorkspaceLoading = dynamic(() => import('@/components/workspace/WorkspaceLoading'), {
   ssr: false
@@ -74,7 +83,8 @@ function WorkspaceContent() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login?redirect=/workspace')
+      const signInUrl = getSignInUrl()
+      router.push(`${signInUrl}?redirect_url=/workspace`)
     }
   }, [isAuthenticated, router])
 

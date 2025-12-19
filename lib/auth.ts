@@ -41,6 +41,28 @@ export async function requireAuth(request?: NextRequest) {
 }
 
 /**
+ * Check if user is allowed (allowlist check)
+ * Returns true if no allowlist is set, or if user email is in allowlist
+ */
+export function checkAllowlist(email: string | null | undefined): { allowed: boolean; reason?: string } {
+  const allowlistEmails = process.env.ALLOWLIST_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
+  
+  if (!allowlistEmails.length) {
+    return { allowed: true } // No allowlist, allow all
+  }
+  
+  if (!email) {
+    return { allowed: false, reason: 'Email not found in user profile' }
+  }
+  
+  if (!allowlistEmails.includes(email)) {
+    return { allowed: false, reason: 'User not in allowlist' }
+  }
+  
+  return { allowed: true }
+}
+
+/**
  * Rate limiting helper
  * Tracks requests per user per minute
  */

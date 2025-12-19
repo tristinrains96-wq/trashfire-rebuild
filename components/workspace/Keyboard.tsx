@@ -22,10 +22,13 @@ import {
   Download,
   Play,
   Settings,
-  Zap
+  Zap,
+  AlertCircle
 } from 'lucide-react'
 import { useWorkspace } from '@/store/workspace'
+import { useAuth } from '@/store/auth'
 import chatBus from '@/lib/chat-bus'
+import { isDemoMode, showDemoModeMessage } from '@/lib/demoMode'
 
 interface KeyboardProps {
   onAssist?: (action: any) => void
@@ -123,21 +126,73 @@ const contextConfig = {
   }
 }
 
+interface GuardrailsStatus {
+  canGenerate: boolean
+  generationEnabled: boolean
+  allowlistAllowed: boolean
+  allowlistReason?: string
+}
+
 export default function Keyboard({ onAssist }: KeyboardProps) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [inputValue, setInputValue] = useState('')
   const [isFocused, setIsFocused] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [showSecondaryActions, setShowSecondaryActions] = useState(false)
+  const [guardrailsStatus, setGuardrailsStatus] = useState<GuardrailsStatus | null>(null)
+  const [guardrailsLoading, setGuardrailsLoading] = useState(true)
   const kebabRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   
   const { activeSection, status, taskProgress, setStatus, setTaskProgress } = useWorkspace()
+  const { isAuthenticated } = useAuth()
   const config = contextConfig[activeSection] || contextConfig.script
+
+  // Fetch guardrails status (disabled in demo mode)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setGuardrailsLoading(false)
+      return
+    }
+
+    if (isDemoMode()) {
+      // Demo mode: allow generation UI but disable actual calls
+      setGuardrailsStatus({
+        canGenerate: false, // Disable actual generation
+        generationEnabled: false,
+        allowlistAllowed: false,
+        allowlistReason: 'Demo Mode: Generation disabled in public UI branch',
+      })
+      setGuardrailsLoading(false)
+      return
+    }
+
+    fetch('/api/guardrails/check')
+      .then(res => res.json())
+      .then(data => {
+        setGuardrailsStatus({
+          canGenerate: data.canGenerate || false,
+          generationEnabled: data.generationEnabled !== false,
+          allowlistAllowed: data.allowlistAllowed !== false,
+          allowlistReason: data.allowlistReason,
+        })
+        setGuardrailsLoading(false)
+      })
+      .catch(error => {
+        console.error('[Keyboard] Error checking guardrails:', error)
+        setGuardrailsLoading(false)
+      })
+  }, [isAuthenticated])
 
   // Handle send
   const handleSend = async () => {
-    if (!inputValue.trim() || isProcessing) return
+    if (!inputValue.trim() || isProcessing || isGenerationDisabled) return
+    
+    // Demo mode: show message and return
+    if (isDemoMode()) {
+      showDemoModeMessage('Episode generation')
+      return
+    }
     
     const text = inputValue.trim()
     setInputValue('')
@@ -145,6 +200,96 @@ export default function Keyboard({ onAssist }: KeyboardProps) {
     setStatus('busy')
     setTaskProgress(0)
     
+    // If in script section, call episode creation API
+    if (activeSection === 'script') {
+      let episodeId: string | null = null
+      let pollInterval: NodeJS.Timeout | null = null
+      
+      try {
+        setTaskProgress(0)
+        
+        const response = await fetch('/api/episodes/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            idea: text,
+            style: 'shonen', // TODO: Add style dropdown
+          }),
+        })
+
+        if (!response.ok) {
+          const error = await response.json()
+          throw new Error(error.error || 'Failed to create episode')
+        }
+
+        const data = await response.json()
+        episodeId = data.episode?.id
+        
+        // Start polling job status
+        if (episodeId) {
+          pollInterval = setInterval(async () => {
+            try {
+              const statusResponse = await fetch(`/api/episodes/${episodeId}/job-status`)
+              if (statusResponse.ok) {
+                const statusData = await statusResponse.json()
+                setTaskProgress(statusData.progress || 0)
+                
+                // Update status label if available
+                if (statusData.passLabel) {
+                  // Could emit event for UI to show pass label
+                  console.log('[Keyboard] Pass:', statusData.passLabel)
+                }
+                
+                // Check if complete
+                if (statusData.state === 'completed' || statusData.status === 'complete') {
+                  if (pollInterval) clearInterval(pollInterval)
+                  setTaskProgress(100)
+                  
+                  // Emit episode created event
+                  chatBus.emit('episode:created', { episode: data.episode, progress: { outline: 100, script: 100, assets: 0 } })
+                  chatBus.emit('script:message', { text, episode: data.episode })
+                  
+                  setTimeout(() => {
+                    setIsProcessing(false)
+                    setStatus('ready')
+                    setTaskProgress(null)
+                  }, 500)
+                } else if (statusData.state === 'failed' || statusData.status === 'error') {
+                  if (pollInterval) clearInterval(pollInterval)
+                  throw new Error('Episode generation failed')
+                }
+              }
+            } catch (err) {
+              console.error('[Keyboard] Status poll error:', err)
+            }
+          }, 2000) // Poll every 2 seconds
+        } else {
+          // Fallback: no episode ID, use response data
+          setTaskProgress(100)
+          chatBus.emit('episode:created', { episode: data.episode, progress: data.progress })
+          chatBus.emit('script:message', { text, episode: data.episode })
+          
+          setTimeout(() => {
+            setIsProcessing(false)
+            setStatus('ready')
+            setTaskProgress(null)
+          }, 500)
+        }
+      } catch (error: any) {
+        if (pollInterval) clearInterval(pollInterval)
+        console.error('[Keyboard] Episode creation error:', error)
+        setIsProcessing(false)
+        setStatus('error')
+        setTaskProgress(null)
+        // Emit error event
+        chatBus.emit('episode:error', { error: error.message })
+      }
+      return
+    }
+    
+    // Default behavior for other sections
     // Simulate progress
     let progressValue = 0
     setTaskProgress(progressValue)
@@ -243,8 +388,26 @@ export default function Keyboard({ onAssist }: KeyboardProps) {
     }
   }, [showSecondaryActions])
 
+  // Determine if generation is disabled
+  const isGenerationDisabled = !guardrailsLoading && (
+    !guardrailsStatus?.generationEnabled || !guardrailsStatus?.allowlistAllowed
+  )
+  const generationDisabledReason = !guardrailsStatus?.generationEnabled
+    ? 'Generation is disabled (SAFE MODE). Set GENERATION_ENABLED=true to run providers.'
+    : !guardrailsStatus?.allowlistAllowed
+    ? 'You are not allowlisted for generation in this environment.'
+    : null
+
   return (
     <>
+      {/* Guardrails Status Banner */}
+      {!guardrailsLoading && isGenerationDisabled && generationDisabledReason && (
+        <div className="w-full mb-2 px-4 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-lg flex items-center gap-2 text-sm text-yellow-400">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{generationDisabledReason}</span>
+        </div>
+      )}
+
       {/* Main Input Tray */}
       <div className="w-full">
         <div className="flex h-16 items-center gap-3">
@@ -276,7 +439,7 @@ export default function Keyboard({ onAssist }: KeyboardProps) {
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               onKeyDown={handleKeyDown}
-              disabled={isProcessing}
+              disabled={isProcessing || isGenerationDisabled}
               className="rounded-full"
             />
           </div>
@@ -292,7 +455,7 @@ export default function Keyboard({ onAssist }: KeyboardProps) {
             size="icon" 
             className="h-10 w-10 shrink-0 relative overflow-hidden"
             onClick={handlePrimaryAction}
-            disabled={isProcessing}
+            disabled={isProcessing || isGenerationDisabled}
           >
             {isProcessing && taskProgress !== null ? (
               <div className="absolute inset-0 flex items-center justify-center">

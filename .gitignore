@@ -23,8 +23,11 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local env files
+.env.local
 .env*.local
 .env
+.env.*
+!.env.example
 
 # Vercel
 .vercel
@@ -52,3 +55,6 @@ AppData/
 
 # Test results
 stress_test_week3_*.json
+
+# TrashFire specific
+.trashfire/

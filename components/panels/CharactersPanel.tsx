@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import CharacterTimeline from '@/components/CharacterTimeline'
 import CharacterDNASidebar from '@/components/CharacterDNASidebar'
+import { isDemoMode, showDemoModeMessage } from '@/lib/demoMode'
 
 interface CharacterVersion {
   id: string
@@ -31,6 +32,13 @@ export default function CharactersPanel() {
 
   const handleAssist = async (action: any) => {
     console.log('Assist action:', action)
+    
+    // Demo mode check
+    if (isDemoMode()) {
+      showDemoModeMessage('Character assist')
+      return
+    }
+    
     try {
       const response = await fetch('/api/brain/character-assist', {
         method: 'POST',

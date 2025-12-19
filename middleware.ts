@@ -9,18 +9,10 @@ const CLERK_ENABLED = !!(
   process.env.CLERK_SECRET_KEY !== 'sk_test_...'
 )
 
-// Protected routes that require authentication
-const protectedRoutes = ['/workspace', '/dashboard', '/settings']
-
-// Protected API routes (generation endpoints)
-const protectedApiRoutes = [
-  '/api/outline',
-  '/api/pipeline',
-  '/api/episodes',
-]
-
+// Conditionally import Clerk functions
 let clerkMiddleware: any
 let createRouteMatcher: any
+let isPublicRoute: any
 let isProtectedRoute: any
 let isProtectedApiRoute: any
 
@@ -29,8 +21,33 @@ if (CLERK_ENABLED) {
     const clerk = require('@clerk/nextjs/server')
     clerkMiddleware = clerk.clerkMiddleware
     createRouteMatcher = clerk.createRouteMatcher
-    isProtectedRoute = createRouteMatcher(protectedRoutes)
-    isProtectedApiRoute = createRouteMatcher(protectedApiRoutes)
+    
+    // Public routes that don't require authentication
+    isPublicRoute = createRouteMatcher([
+      '/',
+      '/sign-in(.*)',
+      '/sign-up(.*)',
+      '/login', // Keep for backward compatibility
+      '/setup',
+      '/api/setup/status',
+      '/api/health',
+      '/api/healthz',
+    ])
+
+    // Protected routes that require authentication
+    isProtectedRoute = createRouteMatcher([
+      '/workspace(.*)',
+      '/dashboard(.*)',
+      '/settings(.*)',
+      '/auth-doctor(.*)',
+    ])
+
+    // Protected API routes (generation endpoints)
+    isProtectedApiRoute = createRouteMatcher([
+      '/api/outline(.*)',
+      '/api/pipeline(.*)',
+      '/api/episodes(.*)',
+    ])
   } catch (error) {
     console.warn('[Middleware] Clerk not available, auth disabled:', error)
   }
@@ -38,62 +55,55 @@ if (CLERK_ENABLED) {
 
 // Fallback middleware if Clerk not configured
 function fallbackMiddleware(request: NextRequest) {
-  const { pathname } = request.nextUrl
-  
-  // Allow all routes in dev mode without Clerk
-  if (process.env.NODE_ENV === 'development' && !CLERK_ENABLED) {
-    return NextResponse.next()
-  }
-  
-  // In production without Clerk, still allow but log warning
-  if (!CLERK_ENABLED) {
-    console.warn('[Middleware] Clerk not configured, allowing request to:', pathname)
-    return NextResponse.next()
-  }
-  
   return NextResponse.next()
 }
 
+// Main middleware
 export default CLERK_ENABLED && clerkMiddleware
   ? clerkMiddleware(async (auth: any, request: NextRequest) => {
-  const { pathname } = request.nextUrl
+      const { pathname } = request.nextUrl
 
-  // Protect page routes
-  if (isProtectedRoute(request)) {
-    const { userId } = await auth()
-    if (!userId) {
-      const signInUrl = new URL('/login', request.url)
-      signInUrl.searchParams.set('redirect', pathname)
-      return NextResponse.redirect(signInUrl)
-    }
-  }
+      // Allow public routes
+      if (isPublicRoute(request)) {
+        return NextResponse.next()
+      }
 
-  // Protect API routes (generation endpoints)
-  if (isProtectedApiRoute(request)) {
-    const { userId } = await auth()
-    if (!userId) {
-      return NextResponse.json(
-        { error: 'Unauthorized: Authentication required' },
-        { status: 401 }
-      )
-    }
-  }
+      // Protect page routes
+      if (isProtectedRoute(request)) {
+        const { userId } = await auth()
+        if (!userId) {
+          const signInUrl = new URL('/sign-in', request.url)
+          signInUrl.searchParams.set('redirect_url', pathname)
+          return NextResponse.redirect(signInUrl)
+        }
+      }
 
-  return NextResponse.next()
-})
+      // Protect API routes (generation endpoints)
+      if (isProtectedApiRoute(request)) {
+        const { userId } = await auth()
+        if (!userId) {
+          return NextResponse.json(
+            { error: 'Unauthorized: Authentication required' },
+            { status: 401 }
+          )
+        }
+      }
+
+      return NextResponse.next()
+    })
   : fallbackMiddleware
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (public folder)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*))',
+    // Match all request paths except for the ones starting with:
+    // - _next/static (static files)
+    // - _next/image (image optimization files)
+    // - _next/webpack (webpack chunks)
+    // - favicon.ico (favicon file)
+    // - files with extensions (images, etc.)
+    // - Clerk internal routes (already handled by Clerk middleware)
+    '/((?!_next/static|_next/image|_next/webpack|favicon.ico|.*\\..*).*)',
+    // Match API routes (Clerk middleware will handle its own routes)
+    '/api/(.*)',
   ],
 }
-

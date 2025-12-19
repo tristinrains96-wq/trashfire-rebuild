@@ -5,8 +5,10 @@ type Events = {
   'command:submit': { text: string; files?: File[] }
   'flow:intent': { intent: string; payload?: any }
   // Legacy events for backward compatibility
-  'script:message': { text: string; files?: File[] }
+  'script:message': { text: string; files?: File[]; episode?: any }
   'characters:message': { text: string; files?: File[] }
+  'episode:created': { episode: any; progress?: { outline?: number; script?: number; assets?: number } }
+  'episode:error': { error: string }
   // Quick actions per section
   'script:quick': { action: 'beat_sheet' | 'auto_map_entities' }
   'characters:quick': { action: 'generate_master_sheet' | 'lock_consistency' }

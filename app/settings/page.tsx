@@ -14,22 +14,27 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/store/auth'
-import { LogOut, Key, CreditCard, Moon, Sun, Save } from 'lucide-react'
+import { LogOut, Key, CreditCard, Moon, Sun, Shield } from 'lucide-react'
+
+// Check if Clerk is enabled to determine correct sign-in URL
+const CLERK_ENABLED = !!(
+  typeof window !== 'undefined' &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY !== 'pk_test_...'
+)
+
+const getSignInUrl = () => CLERK_ENABLED ? '/sign-in' : '/login'
+
+// Demo mode - no admin checks
 
 export default function SettingsPage() {
   const { isAuthenticated, user, logout } = useAuth()
   const router = useRouter()
   const [darkMode, setDarkMode] = useState(true)
-  const [apiKeys, setApiKeys] = useState({
-    openai: '',
-    anthropic: '',
-    stability: '',
-  })
-  const [isSaving, setIsSaving] = useState(false)
 
   useEffect(() => {
     if (!isAuthenticated) {
-      router.push('/login')
+      router.push(getSignInUrl())
     }
   }, [isAuthenticated, router])
 
@@ -42,13 +47,7 @@ export default function SettingsPage() {
     router.push('/')
   }
 
-  const handleSave = async () => {
-    setIsSaving(true)
-    // Simulate save
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setIsSaving(false)
-    // In real app, save to backend
-  }
+  // Demo mode - no save functionality
 
   return (
     <div className="min-h-screen bg-[#07090a]">
@@ -157,7 +156,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* API Keys Section */}
+        {/* API Keys Section - Disabled in Demo Mode */}
         <Card className={cn(
           "mb-6 bg-[#0a0f15]/80 backdrop-blur-sm",
           "border border-white/10"
@@ -165,75 +164,22 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Key className="h-5 w-5 text-[#00ffea]" />
-              <CardTitle className="text-white">API Keys</CardTitle>
+              <CardTitle className="text-white">Provider Connections</CardTitle>
             </div>
             <CardDescription className="text-white/60">
-              Manage your API keys for external services
+              Demo Mode: API key management is disabled. Production uses secure backend keys stored server-side.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label className="text-white/80">OpenAI API Key</Label>
-              <Input
-                type="password"
-                value={apiKeys.openai}
-                onChange={(e) => setApiKeys({ ...apiKeys, openai: e.target.value })}
-                placeholder="sk-..."
-                className={cn(
-                  "mt-2 bg-black/30 border-white/10",
-                  "focus:border-[#00ffea] focus:ring-[#00ffea]/20",
-                  "text-white placeholder:text-white/40"
-                )}
-              />
+          <CardContent>
+            <div className="flex items-center gap-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+              <Shield className="h-5 w-5 text-blue-400" />
+              <div>
+                <p className="text-sm font-medium text-blue-400">Demo Mode Active</p>
+                <p className="text-xs text-blue-300/70 mt-1">
+                  This is a UI-only demo branch. API key management is not available.
+                </p>
+              </div>
             </div>
-            <div>
-              <Label className="text-white/80">Anthropic API Key</Label>
-              <Input
-                type="password"
-                value={apiKeys.anthropic}
-                onChange={(e) => setApiKeys({ ...apiKeys, anthropic: e.target.value })}
-                placeholder="sk-ant-..."
-                className={cn(
-                  "mt-2 bg-black/30 border-white/10",
-                  "focus:border-[#00ffea] focus:ring-[#00ffea]/20",
-                  "text-white placeholder:text-white/40"
-                )}
-              />
-            </div>
-            <div>
-              <Label className="text-white/80">Stability AI API Key</Label>
-              <Input
-                type="password"
-                value={apiKeys.stability}
-                onChange={(e) => setApiKeys({ ...apiKeys, stability: e.target.value })}
-                placeholder="sk-..."
-                className={cn(
-                  "mt-2 bg-black/30 border-white/10",
-                  "focus:border-[#00ffea] focus:ring-[#00ffea]/20",
-                  "text-white placeholder:text-white/40"
-                )}
-              />
-            </div>
-            <Button
-              onClick={handleSave}
-              disabled={isSaving}
-              className={cn(
-                "bg-[#00ffea] hover:bg-[#00e6d1]",
-                "text-black font-semibold"
-              )}
-            >
-              {isSaving ? (
-                <>
-                  <Save className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save API Keys
-                </>
-              )}
-            </Button>
           </CardContent>
         </Card>
 

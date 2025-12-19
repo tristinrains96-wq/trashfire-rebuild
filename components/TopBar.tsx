@@ -39,7 +39,19 @@ export default function TopBar() {
               height={48}
               className="h-6 md:h-7 w-auto"
               priority
+              onError={(e) => {
+                // Fallback to SVG "TF" icon if PNG fails
+                const target = e.target as HTMLImageElement
+                target.style.display = 'none'
+                const fallback = target.nextElementSibling as HTMLElement
+                if (fallback) {
+                  fallback.style.display = 'flex'
+                }
+              }}
             />
+            <div className="hidden items-center justify-center h-6 md:h-7 w-12 bg-gradient-to-br from-teal-500 to-cyan-600 rounded text-white font-bold text-sm">
+              TF
+            </div>
           </Link>
         </div>
         <div className="flex flex-1 items-center justify-between space-x-2 md:justify-end">

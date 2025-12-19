@@ -10,12 +10,19 @@
     "clean": "node -e \"try{require('fs').rmSync('.next',{recursive:true,force:true})}catch(e){}\"",
     "dev:open": "concurrently -k \"pnpm dev || npm run dev\" \"pnpm _open_when_ready || npm run _open_when_ready\"",
     "_open_when_ready": "wait-on http://localhost:3000/healthz && node scripts/open.js",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "phase2_5:check": "npx tsx scripts/run_phase2_5_check.ts",
+    "phase2_5:test": "npx ts-node scripts/phase2_5_test.ts",
+    "ffmpeg:install": "powershell -ExecutionPolicy Bypass -File scripts/install_ffmpeg_windows.ps1",
+    "public:scan": "npx ts-node scripts/public_secret_scan.ts",
+    "public:check": "npx ts-node scripts/public_check.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@clerk/nextjs": "^5.0.0",
     "@radix-ui/react-dropdown-menu": "^2.0.6",
     "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-progress": "^1.1.8",
     "@radix-ui/react-select": "^2.0.0",
     "@radix-ui/react-separator": "^1.0.3",
     "@radix-ui/react-slider": "^1.1.2",
@@ -23,6 +30,7 @@
     "@radix-ui/react-switch": "^1.0.3",
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-tooltip": "^1.0.7",
+    "@supabase/supabase-js": "^2.87.1",
     "bull": "^4.12.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.0.0",
@@ -32,22 +40,26 @@
     "open": "^10.0.0",
     "react": "^18",
     "react-dom": "^18",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^2.0.0",
     "tailwindcss-animate": "^1.0.7",
+    "zod": "^3.22.4",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
-    "@types/node": "^20",
+    "@types/node": "^20.19.27",
     "@types/react": "^18",
     "@types/react-dom": "^18",
     "autoprefixer": "^10.0.1",
     "concurrently": "^8.2.0",
+    "dotenv": "^17.2.3",
     "eslint": "^8",
     "eslint-config-next": "14.0.0",
     "postcss": "^8",
     "prettier": "^3.0.0",
     "tailwindcss": "^3.3.0",
-    "typescript": "^5",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
     "wait-on": "^7.0.0"
   }
 }

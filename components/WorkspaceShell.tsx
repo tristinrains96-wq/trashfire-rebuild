@@ -6,6 +6,7 @@ import TopBar from './TopBar'
 import GenBox from './stage/GenBox'
 import BottomStack from './layout/BottomStack'
 import FloatingActionBar from './stage/FloatingActionBar'
+import { isDemoMode, showDemoModeMessage } from '@/lib/demoMode'
 
 interface AssistAction {
   type: 'assist'
@@ -21,6 +22,13 @@ export default function WorkspaceShell() {
 
   const handleAssist = async (action: AssistAction) => {
     console.log('Workspace assist action:', action)
+    
+    // Demo mode check
+    if (isDemoMode()) {
+      showDemoModeMessage('Character assist')
+      return
+    }
+    
     try {
       const response = await fetch('/api/brain/character-assist', {
         method: 'POST',

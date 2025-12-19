@@ -9,55 +9,100 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { useAuth } from '@/store/auth'
 import { Sparkles } from 'lucide-react'
+import { useAuth } from '@/store/auth'
+
+// Check if Clerk is enabled
+const CLERK_ENABLED = !!(
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY !== 'pk_test_...'
+)
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const { login, isAuthenticated } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { login } = useAuth() // Use the hook properly at component level
 
+  // Redirect to Clerk sign-in if Clerk is enabled
   useEffect(() => {
-    if (isAuthenticated) {
+    if (CLERK_ENABLED) {
       const redirect = searchParams.get('redirect') || '/dashboard'
-      router.push(redirect)
+      router.replace(`/sign-in?redirect_url=${encodeURIComponent(redirect)}`)
     }
-  }, [isAuthenticated, router, searchParams])
+  }, [router, searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation()
+    
+    // If Clerk is enabled, redirect to Clerk sign-in
+    if (CLERK_ENABLED) {
+      const redirect = searchParams.get('redirect') || '/dashboard'
+      router.push(`/sign-in?redirect_url=${encodeURIComponent(redirect)}`)
+      return
+    }
+    
+    console.log('=== LOGIN FORM SUBMITTED ===')
+    console.log('Email:', email)
+    console.log('Password length:', password.length)
+    
+    if (!email || !password) {
+      setError('Please enter both email and password')
+      console.log('Validation failed: missing email or password')
+      return
+    }
+    
     setError('')
     setIsLoading(true)
+    console.log('Starting login process...')
 
     try {
+      // Use simple mock auth - always succeeds (only when Clerk is disabled)
+      console.log('Using mock authentication')
+      console.log('Calling login function...')
       const success = await login(email, password)
+      console.log('Login result:', success)
+      
       if (success) {
         const redirect = searchParams.get('redirect') || '/dashboard'
+        console.log('Login successful! Redirecting to:', redirect)
+        setIsLoading(false)
         router.push(redirect)
       } else {
+        console.log('Login failed')
         setError('Invalid credentials')
+        setIsLoading(false)
       }
-    } catch (err) {
-      setError('An error occurred. Please try again.')
-    } finally {
+    } catch (err: any) {
+      console.error('=== LOGIN ERROR ===', err)
+      setError(err.message || 'An error occurred. Please try again.')
       setIsLoading(false)
     }
+  }
+
+  const handleButtonClick = (e: React.MouseEvent) => {
+    console.log('=== BUTTON CLICKED ===', {
+      email: email.length > 0,
+      password: password.length > 0,
+      isLoading
+    })
+    // Don't prevent default - let form handle it
   }
 
   return (
     <div className="min-h-screen bg-[#07090a] relative overflow-hidden flex items-center justify-center">
       {/* Background Effects */}
-      <div className="absolute inset-0 -z-10 overflow-hidden">
+      <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(0,255,234,0.1)_0%,transparent_60%)]" />
         <div className="absolute left-1/2 top-1/2 h-[200vh] w-[200vw] -translate-x-1/2 -translate-y-1/2 bg-[conic-gradient(from_180deg,rgba(0,255,200,0.03),transparent_30%)] blur-3xl" />
       </div>
 
       {/* Navigation */}
-      <nav className="absolute top-0 left-0 right-0 px-6 py-6">
+      <nav className="absolute top-0 left-0 right-0 px-6 py-6 z-10">
         <div className="container mx-auto flex items-center justify-between">
           <Link href="/" className="flex items-center space-x-2">
             <Image
@@ -82,7 +127,7 @@ export default function LoginPage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="w-full max-w-md px-6"
+        className="w-full max-w-md px-6 z-10 relative"
       >
         <Card className={cn(
           "bg-[#0a0f15]/95 backdrop-blur-xl",
@@ -108,7 +153,7 @@ export default function LoginPage() {
             </p>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4" noValidate>
               {error && (
                 <div className="p-3 rounded-lg bg-red-500/20 border border-red-500/50 text-red-400 text-sm">
                   {error}
@@ -121,7 +166,10 @@ export default function LoginPage() {
                 <Input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    console.log('Email changed:', e.target.value)
+                    setEmail(e.target.value)
+                  }}
                   placeholder="you@example.com"
                   required
                   className={cn(
@@ -138,7 +186,10 @@ export default function LoginPage() {
                 <Input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    console.log('Password changed, length:', e.target.value.length)
+                    setPassword(e.target.value)
+                  }}
                   placeholder="••••••••"
                   required
                   className={cn(
@@ -151,13 +202,17 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 disabled={isLoading}
+                onClick={handleButtonClick}
                 className={cn(
-                  "w-full",
+                  "w-full relative z-20",
                   "bg-[#00ffea] hover:bg-[#00e6d1]",
                   "text-black font-semibold",
                   "shadow-[0_0_20px_rgba(0,255,234,0.3)]",
-                  "hover:shadow-[0_0_30px_rgba(0,255,234,0.5)]"
+                  "hover:shadow-[0_0_30px_rgba(0,255,234,0.5)]",
+                  "cursor-pointer",
+                  isLoading && "opacity-50 cursor-not-allowed"
                 )}
+                style={{ pointerEvents: 'auto' }}
               >
                 {isLoading ? (
                   <>
@@ -169,15 +224,16 @@ export default function LoginPage() {
                 )}
               </Button>
             </form>
-            <div className="mt-6 text-center">
-              <p className="text-sm text-white/60">
-                Demo mode: Use any email and password to sign in
-              </p>
-            </div>
+            {!CLERK_ENABLED && (
+              <div className="mt-6 text-center">
+                <p className="text-sm text-white/60">
+                  Demo mode: Use any email and password to sign in
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </motion.div>
     </div>
   )
 }
-

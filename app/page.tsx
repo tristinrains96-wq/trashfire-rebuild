@@ -11,6 +11,15 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/store/auth'
 import { useRouter } from 'next/navigation'
 
+// Check if Clerk is enabled to determine correct sign-in URL
+const CLERK_ENABLED = !!(
+  typeof window !== 'undefined' &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY &&
+  process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY !== 'pk_test_...'
+)
+
+const getSignInUrl = () => CLERK_ENABLED ? '/sign-in' : '/login'
+
 // Mock recent projects data
 const recentProjects = [
   {
@@ -44,7 +53,7 @@ export default function Home() {
     if (isAuthenticated) {
       router.push('/workspace')
     } else {
-      router.push('/login')
+      router.push(getSignInUrl())
     }
   }
 
@@ -83,7 +92,7 @@ export default function Home() {
               </Link>
             </>
           ) : (
-            <Link href="/login">
+            <Link href={getSignInUrl()}>
               <Button variant="ghost" className="text-white hover:text-[#00ffea]">
                 Sign In
               </Button>

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Upload, Play, Pause } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface WorkspaceCanvasProps {
@@ -63,11 +64,26 @@ export default function WorkspaceCanvas({ className }: WorkspaceCanvasProps) {
             <Upload className="h-16 w-16 text-[#00ffea] drop-shadow-[0_0_20px_rgba(0,255,234,0.5)]" />
           </motion.div>
           <h3 className="text-xl font-semibold text-white mb-2">
-            Drop video or media here
+            Craft your anime episode
           </h3>
-          <p className="text-white/60 text-sm text-center max-w-md">
-            Drag and drop your video files, or click to browse
+          <p className="text-white/60 text-sm text-center max-w-md mb-6">
+            Describe your story below—we&apos;ll generate script, scenes, and previews.
           </p>
+          <Button
+            onClick={() => {
+              // Focus Script Lab input
+              const scriptInput = document.querySelector('input[placeholder*="story idea"]') as HTMLInputElement
+              if (scriptInput) {
+                scriptInput.focus()
+              } else {
+                // Fallback: navigate to script section
+                window.location.href = '/workspace?section=script'
+              }
+            }}
+            className="bg-[#00ffea] hover:bg-[#00e6d1] text-black font-semibold shadow-[0_0_20px_rgba(0,255,234,0.3)]"
+          >
+            Generate from Idea
+          </Button>
         </div>
       )}
 

@@ -79,6 +79,14 @@ export default function CanvasTopBar() {
       return
     }
 
+    // Demo mode check
+    const { isDemoMode, showDemoModeMessage } = await import('@/lib/demoMode')
+    if (isDemoMode()) {
+      showDemoModeMessage('Script analysis')
+      pushAssistant('Demo Mode: Script analysis is disabled. This is a UI-only demo branch.')
+      return
+    }
+
     try {
       const response = await fetch('/api/script/analyze', {
         method: 'POST',

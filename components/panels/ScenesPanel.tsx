@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Star, Play, Clock } from 'lucide-react'
+import ProgressLoader from '@/components/workspace/ProgressLoader'
 
 const storyboardCards = [
   { id: 1, title: 'Opening Scene', status: 'Ready', thumbnail: 'Scene 1' },
@@ -21,9 +22,22 @@ export default function ScenesPanel() {
   const [motionIntensity, setMotionIntensity] = useState([50])
   const [premium, setPremium] = useState(false)
   const [duration, setDuration] = useState('30')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [generationProgress, setGenerationProgress] = useState(0)
 
   return (
     <div className="space-y-6 px-4">
+      {/* Progress indicator when generating */}
+      {isGenerating && (
+        <div className="flex items-center justify-center py-8">
+          <ProgressLoader 
+            progress={generationProgress} 
+            label="Generating Scenes..."
+            size="lg"
+          />
+        </div>
+      )}
+      
       <div>
         {/* Storyboard Strip */}
         <div className="mb-6">
