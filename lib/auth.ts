@@ -1,38 +1,30 @@
 /**
- * Auth utilities for TrashFire
- * Clerk authentication middleware and helpers
+ * Auth utilities stub for Public UI Demo Branch
+ * NO REAL AUTHENTICATION - FOR DEMO ONLY
+ * Uses demo auth from lib/demoAuth.ts
  */
 
-import { auth, clerkClient } from '@clerk/nextjs/server'
-import { NextRequest } from 'next/server'
+import { getDemoUser, isAuthenticated as isDemoAuthenticated } from './demoAuth'
 
 /**
- * Get authenticated user from request
- * Returns null if not authenticated
+ * Get authenticated user (returns demo user)
  */
-export async function getAuthUser(request?: NextRequest) {
-  try {
-    const { userId } = await auth()
-    if (!userId) return null
-
-    // Get user details from Clerk
-    const user = await clerkClient.users.getUser(userId)
+export async function getAuthUser(request?: any) {
+  const demoUser = getDemoUser()
+  if (demoUser) {
     return {
-      id: userId,
-      email: user.emailAddresses[0]?.emailAddress,
-      name: user.firstName || user.username || 'User',
+      id: demoUser.id,
+      email: demoUser.email,
+      name: demoUser.name,
     }
-  } catch (error) {
-    console.error('[Auth] Error getting user:', error)
-    return null
   }
+  return null
 }
 
 /**
- * Require authentication for API route
- * Throws error if not authenticated
+ * Require authentication (always succeeds in demo)
  */
-export async function requireAuth(request?: NextRequest) {
+export async function requireAuth(request?: any) {
   const user = await getAuthUser(request)
   if (!user) {
     throw new Error('Unauthorized: Authentication required')
@@ -41,60 +33,28 @@ export async function requireAuth(request?: NextRequest) {
 }
 
 /**
- * Check if user is allowed (allowlist check)
- * Returns true if no allowlist is set, or if user email is in allowlist
+ * Check if user is allowed (always true in demo)
  */
 export function checkAllowlist(email: string | null | undefined): { allowed: boolean; reason?: string } {
-  const allowlistEmails = process.env.ALLOWLIST_EMAILS?.split(',').map(e => e.trim()).filter(Boolean) || []
-  
-  if (!allowlistEmails.length) {
-    return { allowed: true } // No allowlist, allow all
-  }
-  
-  if (!email) {
-    return { allowed: false, reason: 'Email not found in user profile' }
-  }
-  
-  if (!allowlistEmails.includes(email)) {
-    return { allowed: false, reason: 'User not in allowlist' }
-  }
-  
   return { allowed: true }
 }
 
 /**
- * Rate limiting helper
- * Tracks requests per user per minute
+ * Rate limiting helper (always allows in demo)
  */
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
 
 export async function checkRateLimit(
   userId: string,
   maxRequests: number = 10,
-  windowMs: number = 60 * 1000 // 1 minute
+  windowMs: number = 60 * 1000
 ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
   const now = Date.now()
-  const key = userId
-  const record = rateLimitMap.get(key)
-
-  if (!record || now > record.resetAt) {
-    // Reset window
-    rateLimitMap.set(key, {
-      count: 1,
-      resetAt: now + windowMs,
-    })
-    return { allowed: true, remaining: maxRequests - 1, resetAt: now + windowMs }
-  }
-
-  if (record.count >= maxRequests) {
-    return { allowed: false, remaining: 0, resetAt: record.resetAt }
-  }
-
-  record.count++
+  const resetAt = now + windowMs
+  
   return {
     allowed: true,
-    remaining: maxRequests - record.count,
-    resetAt: record.resetAt,
+    remaining: maxRequests,
+    resetAt,
   }
 }
-

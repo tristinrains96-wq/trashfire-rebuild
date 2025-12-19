@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server'
-import { groqPing } from '@/lib/utils'
 
+/**
+ * Health check endpoint for Public UI Demo Branch
+ * NO REAL SERVICES - FOR DEMO ONLY
+ */
 export async function GET() {
-  const services: string[] = ['web']
-  const groqStatus = await groqPing()
-  
-  if (groqStatus) {
-    services.push('groq')
-  }
-
   return NextResponse.json({ 
     status: 'ok', 
-    services,
-    groq: groqStatus ? 'online' : 'stub' 
+    services: ['web'],
+    mode: 'demo',
+    note: 'This is a UI-only demo branch. All backend services are disabled.'
   })
 }

@@ -82,6 +82,11 @@ export default function ApprovalPage() {
   const [elevenLabsConfigured, setElevenLabsConfigured] = useState<boolean | null>(null)
 
   useEffect(() => {
+    // Demo mode: use mock data
+    if (isDemoMode()) {
+      loadMockData()
+      return
+    }
     loadAssets()
     loadUsage()
     checkGuardrails()
@@ -89,7 +94,57 @@ export default function ApprovalPage() {
     checkElevenLabs()
   }, [episodeId])
 
+  // Demo mode check
+  function isDemoMode(): boolean {
+    return typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+  }
+
+  // Load mock data for demo mode
+  function loadMockData() {
+    setLoading(false)
+    setAssets([
+      {
+        id: 'char_rin',
+        name: 'Rin',
+        type: 'character' as const,
+        description: 'A determined young warrior',
+        prompt: 'anime character, red hair, determined expression',
+        locked: false,
+        version: 1,
+        locked_variant_id: null,
+        preview_url: '/trashfire-logo.png',
+        variants: [],
+      },
+      {
+        id: 'bg_rooftop',
+        name: 'Rooftop Night',
+        type: 'location' as const,
+        description: 'School rooftop at night',
+        prompt: 'anime background, school rooftop, night, city lights',
+        locked: false,
+        version: 1,
+        locked_variant_id: null,
+        preview_url: '/trashfire-logo.png',
+        variants: [],
+      },
+    ])
+    setUsage({
+      rerollsUsed: 0,
+      rerollsLimit: 3,
+      locksUsed: 0,
+      locksLimit: 10,
+      costEstUsd: 0.0,
+    })
+    setCanGenerate(true)
+    setElevenLabsConfigured(false)
+  }
+
   async function checkElevenLabs() {
+    // Demo mode: always false
+    if (isDemoMode()) {
+      setElevenLabsConfigured(false)
+      return
+    }
     try {
       const res = await fetch('/api/setup/status')
       if (res.ok) {
@@ -98,12 +153,13 @@ export default function ApprovalPage() {
       }
     } catch (error) {
       console.error('[Approval] Check ElevenLabs error:', error)
+      setElevenLabsConfigured(false)
     }
   }
 
-  // Poll animatic job status if generating
+  // Poll animatic job status if generating (disabled in demo mode)
   useEffect(() => {
-    if (!animaticJobId) return
+    if (!animaticJobId || isDemoMode()) return
 
     const interval = setInterval(async () => {
       try {
@@ -133,6 +189,11 @@ export default function ApprovalPage() {
   }, [animaticJobId, episodeId])
 
   async function checkGuardrails() {
+    // Demo mode: always allow
+    if (isDemoMode()) {
+      setCanGenerate(true)
+      return
+    }
     try {
       const res = await fetch('/api/guardrails/check')
       if (res.ok) {
@@ -141,10 +202,16 @@ export default function ApprovalPage() {
       }
     } catch (error) {
       console.error('[Approval] Guardrails check error:', error)
+      setCanGenerate(true) // Fail open
     }
   }
 
   async function loadAssets() {
+    // Demo mode: use mock data
+    if (isDemoMode()) {
+      loadMockData()
+      return
+    }
     try {
       const res = await fetch(`/api/episodes/${episodeId}/assets`)
       if (!res.ok) throw new Error('Failed to load assets')
@@ -158,6 +225,17 @@ export default function ApprovalPage() {
   }
 
   async function loadUsage() {
+    // Demo mode: use defaults
+    if (isDemoMode()) {
+      setUsage({
+        rerollsUsed: 0,
+        rerollsLimit: 3,
+        locksUsed: 0,
+        locksLimit: 10,
+        costEstUsd: 0.0,
+      })
+      return
+    }
     try {
       const res = await fetch(`/api/episodes/${episodeId}/usage`)
       if (!res.ok) throw new Error('Failed to load usage')
@@ -183,6 +261,12 @@ export default function ApprovalPage() {
   }
 
   async function handleSaveEdit(assetId: string) {
+    // Demo mode: show message
+    if (isDemoMode()) {
+      alert('Demo Mode: Asset editing is disabled. This is a UI-only demo branch.')
+      setEditingAssetId(null)
+      return
+    }
     try {
       const res = await fetch(`/api/episodes/${episodeId}/assets/${assetId}`, {
         method: 'PATCH',
@@ -199,6 +283,11 @@ export default function ApprovalPage() {
   }
 
   async function handleRegenerate(assetId: string) {
+    // Demo mode: show message
+    if (isDemoMode()) {
+      alert('Demo Mode: Asset regeneration is disabled. This is a UI-only demo branch.')
+      return
+    }
     if (usage.rerollsUsed >= usage.rerollsLimit) {
       alert(`Reroll limit reached (${usage.rerollsLimit} per asset)`)
       return
@@ -221,6 +310,11 @@ export default function ApprovalPage() {
   }
 
   async function handleLock(assetId: string, variantId: string | null) {
+    // Demo mode: show message
+    if (isDemoMode()) {
+      alert('Demo Mode: Asset locking is disabled. This is a UI-only demo branch.')
+      return
+    }
     try {
       const res = await fetch(`/api/episodes/${episodeId}/assets/${assetId}/lock`, {
         method: 'POST',
@@ -237,6 +331,11 @@ export default function ApprovalPage() {
   }
 
   async function handleUnlock(assetId: string) {
+    // Demo mode: show message
+    if (isDemoMode()) {
+      alert('Demo Mode: Asset unlocking is disabled. This is a UI-only demo branch.')
+      return
+    }
     try {
       const res = await fetch(`/api/episodes/${episodeId}/assets/${assetId}/unlock`, {
         method: 'POST',
@@ -251,6 +350,11 @@ export default function ApprovalPage() {
   }
 
   async function loadRenders() {
+    // Demo mode: no renders
+    if (isDemoMode()) {
+      setAnimaticRenders([])
+      return
+    }
     try {
       const res = await fetch(`/api/episodes/${episodeId}/renders`)
       if (!res.ok) return
@@ -263,6 +367,12 @@ export default function ApprovalPage() {
 
   async function handleGenerateAnimatic() {
     if (generatingAnimatic) return
+
+    // Demo mode: show message
+    if (isDemoMode()) {
+      alert('Demo Mode: Animatic generation is disabled. This is a UI-only demo branch.')
+      return
+    }
 
     // Check if voiced is requested but ElevenLabs is not configured
     if (voicedAnimatic && !elevenLabsConfigured) {
