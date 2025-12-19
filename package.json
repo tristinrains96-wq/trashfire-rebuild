@@ -14,8 +14,8 @@
     "phase2_5:check": "npx tsx scripts/run_phase2_5_check.ts",
     "phase2_5:test": "npx ts-node scripts/phase2_5_test.ts",
     "ffmpeg:install": "powershell -ExecutionPolicy Bypass -File scripts/install_ffmpeg_windows.ps1",
-    "public:scan": "npx ts-node scripts/public_secret_scan.ts",
-    "public:check": "npx ts-node scripts/public_check.ts"
+    "public:scan": "npx tsx scripts/public_secret_scan.ts",
+    "public:check": "npx tsx scripts/public_check.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

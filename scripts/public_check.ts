@@ -17,7 +17,7 @@ let hasErrors = false
 console.log('Step 1: Running secret scan...')
 console.log('')
 try {
-  execSync('npx ts-node scripts/public_secret_scan.ts', {
+  execSync('npx tsx scripts/public_secret_scan.ts', {
     stdio: 'inherit',
     cwd: process.cwd(),
   })
