@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { SceneBlock, Character, BackgroundId } from '@/types'
 import { useWorkspace } from '@/store/workspace'
+import { isDemoMode, showDemoModeMessage } from '@/lib/demoMode'
 
 interface SceneCardProps {
   scene: SceneBlock
@@ -21,6 +22,12 @@ export default function SceneCard({ scene, onUpdate, onGenerate }: SceneCardProp
   const [isGenerating, setIsGenerating] = useState(false)
 
   const handleGenerate = async () => {
+    // Demo mode: show message and return
+    if (isDemoMode()) {
+      showDemoModeMessage('Scene generation')
+      return
+    }
+    
     setIsGenerating(true)
     // Simulate generation process
     await new Promise(resolve => setTimeout(resolve, 3000))

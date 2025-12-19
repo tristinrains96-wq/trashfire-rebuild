@@ -27,6 +27,7 @@ import {
   Volume2,
   AlertCircle
 } from 'lucide-react'
+import { isDemoMode, showDemoModeMessage } from '@/lib/demoMode'
 
 interface Asset {
   id: string
@@ -94,10 +95,7 @@ export default function ApprovalPage() {
     checkElevenLabs()
   }, [episodeId])
 
-  // Demo mode check
-  function isDemoMode(): boolean {
-    return typeof window !== 'undefined' && !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-  }
+  // Demo mode is imported from lib/demoMode
 
   // Load mock data for demo mode
   function loadMockData() {

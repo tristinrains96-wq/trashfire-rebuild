@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Circle, Play, Download, Sparkles } from 'lucide-react'
+import { isDemoMode, showDemoModeMessage } from '@/lib/demoMode'
 
 const checklistItems = [
   { id: 1, label: 'Assets OK', status: true },
@@ -21,6 +22,30 @@ const sparkEstimator = [
 ]
 
 export default function EpisodePanel() {
+  const handleGenerateEpisode = () => {
+    if (isDemoMode()) {
+      showDemoModeMessage('Episode generation')
+      return
+    }
+    // TODO: Implement episode generation
+  }
+
+  const handlePreview = () => {
+    if (isDemoMode()) {
+      showDemoModeMessage('Episode preview')
+      return
+    }
+    // TODO: Implement preview
+  }
+
+  const handleExport = () => {
+    if (isDemoMode()) {
+      showDemoModeMessage('Episode export')
+      return
+    }
+    // TODO: Implement export
+  }
+
   return (
     <div className="space-y-6 px-4">
       <div>
@@ -77,15 +102,15 @@ export default function EpisodePanel() {
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 mt-6">
-          <Button variant="outline" className="flex-1">
+          <Button variant="outline" className="flex-1" onClick={handlePreview}>
             <Play className="h-4 w-4 mr-2" />
             Preview 30s
           </Button>
-          <Button className="flex-1">
+          <Button className="flex-1" onClick={handleGenerateEpisode}>
             <Sparkles className="h-4 w-4 mr-2" />
             Generate Episode
           </Button>
-          <Button variant="outline" className="flex-1">
+          <Button variant="outline" className="flex-1" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />
             Export 1080p
           </Button>
