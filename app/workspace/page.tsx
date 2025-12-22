@@ -4,9 +4,13 @@ import { Suspense, useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Plus } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Plus, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/store/auth'
+import { ProjectLabState } from '@/lib/demo/projectLabTypes'
+import { createDefaultProjectLabState } from '@/lib/demo/projectLabSeed'
+import ModeSwitcher, { WorkspaceMode } from '@/components/workspace/ModeSwitcher'
 
 // Check if Clerk is enabled to determine correct sign-in URL
 const CLERK_ENABLED = !!(
@@ -52,7 +56,12 @@ const WorkspaceCanvas = dynamic(() => import('@/components/workspace/WorkspaceCa
   loading: () => null
 })
 
-const AssetSidebar = dynamic(() => import('@/components/workspace/AssetSidebar'), {
+const ProjectLab = dynamic(() => import('@/components/workspace/ProjectLab'), {
+  ssr: false,
+  loading: () => null
+})
+
+const GuidedSteps = dynamic(() => import('@/components/workspace/GuidedSteps'), {
   ssr: false,
   loading: () => null
 })
@@ -75,11 +84,45 @@ const ProgressBar = dynamic(() => import('@/components/workspace/ProgressBar'), 
   ssr: false
 })
 
+const PlanModeContent = dynamic(() => import('@/components/workspace/PlanModeContent'), {
+  ssr: false
+})
+
+const BuildModeContent = dynamic(() => import('@/components/workspace/BuildModeContent'), {
+  ssr: false
+})
+
+const PreviewModeContent = dynamic(() => import('@/components/workspace/PreviewModeContent'), {
+  ssr: false
+})
+
 function WorkspaceContent() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [activeRender, setActiveRender] = useState<{ episodeId: string; jobId: string } | null>(null)
+  const [projectLabState, setProjectLabState] = useState<ProjectLabState>(() =>
+    createDefaultProjectLabState()
+  )
+  const [mode, setMode] = useState<WorkspaceMode>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('workspace-mode')
+      if (saved === 'plan' || saved === 'build' || saved === 'preview') {
+        return saved
+      }
+    }
+    return 'plan'
+  })
   const { isAuthenticated } = useAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('workspace-mode', mode)
+    }
+  }, [mode])
+
+  const handleUpdateProjectLabState = (updates: Partial<ProjectLabState>) => {
+    setProjectLabState((prev) => ({ ...prev, ...updates }))
+  }
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -109,32 +152,67 @@ function WorkspaceContent() {
         
         {/* Pro Workspace Layout */}
         <ProWorkspaceLayout
-          leftPanel={<AssetSidebar type="tree" />}
+          leftPanel={
+            <ProjectLab
+              projectLabState={projectLabState}
+              onUpdateState={handleUpdateProjectLabState}
+            />
+          }
           rightPanel={<InspectorPanel />}
           centerContent={
             <div className="h-full flex flex-col p-4">
               <div className="mb-4 flex items-center justify-between">
-                <h1 className="text-xl font-semibold text-white">Canvas</h1>
-                <Button
-                  onClick={() => setShowNewProjectModal(true)}
-                  className={cn(
-                    "bg-[#00ffea] hover:bg-[#00e6d1]",
-                    "text-black font-semibold",
-                    "shadow-[0_0_20px_rgba(0,255,234,0.3)]",
-                    "hover:shadow-[0_0_30px_rgba(0,255,234,0.5)]",
-                    "transition-all duration-300"
-                  )}
-                  style={{
-                    boxShadow: '0 0 20px rgba(0,255,234,0.3), 0 0 40px rgba(0,255,234,0.1)'
-                  }}
-                >
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Project
-                </Button>
+                <h1 className="text-xl font-semibold text-white">Workspace</h1>
+                <div className="flex items-center gap-3">
+                  <ModeSwitcher mode={mode} onModeChange={setMode} />
+                  <Button
+                    onClick={() => setShowNewProjectModal(true)}
+                    className={cn(
+                      "bg-[#00ffea] hover:bg-[#00e6d1]",
+                      "text-black font-semibold",
+                      "shadow-[0_0_20px_rgba(0,255,234,0.3)]",
+                      "hover:shadow-[0_0_30px_rgba(0,255,234,0.5)]",
+                      "transition-all duration-300"
+                    )}
+                    style={{
+                      boxShadow: '0 0 20px rgba(0,255,234,0.3), 0 0 40px rgba(0,255,234,0.1)'
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    New Project
+                  </Button>
+                </div>
               </div>
-              <div className="flex-1 min-h-0">
-                <WorkspaceCanvas />
-              </div>
+
+              {/* Guided Steps - Only show in Plan mode */}
+              {mode === 'plan' && (
+                <div className="mb-4">
+                  <GuidedSteps
+                    projectLabState={projectLabState}
+                    onUpdateState={handleUpdateProjectLabState}
+                  />
+                </div>
+              )}
+
+              {/* Mode-Specific Content */}
+              {mode === 'plan' && (
+                <PlanModeContent
+                  projectLabState={projectLabState}
+                  onUpdateState={handleUpdateProjectLabState}
+                />
+              )}
+
+              {mode === 'build' && (
+                <BuildModeContent
+                  projectLabState={projectLabState}
+                  onUpdateState={handleUpdateProjectLabState}
+                />
+              )}
+
+              {mode === 'preview' && (
+                <PreviewModeContent projectLabState={projectLabState} />
+              )}
+
               {/* Progress Bar for active renders */}
               {activeRender && (
                 <div className="mt-4">
