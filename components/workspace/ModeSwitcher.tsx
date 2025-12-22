@@ -1,6 +1,5 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { FileText, Hammer, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

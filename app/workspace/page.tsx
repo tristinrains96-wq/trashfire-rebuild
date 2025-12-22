@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/store/auth'
 import { ProjectLabState } from '@/lib/demo/projectLabTypes'
 import { createDefaultProjectLabState } from '@/lib/demo/projectLabSeed'
-import ModeSwitcher, { WorkspaceMode } from '@/components/workspace/ModeSwitcher'
+import type { WorkspaceMode } from '@/components/workspace/ModeSwitcher'
 
 // Check if Clerk is enabled to determine correct sign-in URL
 const CLERK_ENABLED = !!(
@@ -96,21 +96,28 @@ const PreviewModeContent = dynamic(() => import('@/components/workspace/PreviewM
   ssr: false
 })
 
+const ModeSwitcher = dynamic(() => import('@/components/workspace/ModeSwitcher'), {
+  ssr: false,
+  loading: () => null
+})
+
 function WorkspaceContent() {
   const [showNewProjectModal, setShowNewProjectModal] = useState(false)
   const [activeRender, setActiveRender] = useState<{ episodeId: string; jobId: string } | null>(null)
   const [projectLabState, setProjectLabState] = useState<ProjectLabState>(() =>
     createDefaultProjectLabState()
   )
-  const [mode, setMode] = useState<WorkspaceMode>(() => {
+  const [mode, setMode] = useState<WorkspaceMode>('plan')
+  
+  // Load mode from localStorage on mount
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('workspace-mode')
       if (saved === 'plan' || saved === 'build' || saved === 'preview') {
-        return saved
+        setMode(saved)
       }
     }
-    return 'plan'
-  })
+  }, [])
   const { isAuthenticated } = useAuth()
   const router = useRouter()
 
@@ -164,7 +171,9 @@ function WorkspaceContent() {
               <div className="mb-4 flex items-center justify-between">
                 <h1 className="text-xl font-semibold text-white">Workspace</h1>
                 <div className="flex items-center gap-3">
-                  <ModeSwitcher mode={mode} onModeChange={setMode} />
+                  <Suspense fallback={<div className="w-32 h-8 bg-white/5 rounded-lg animate-pulse" />}>
+                    <ModeSwitcher mode={mode} onModeChange={setMode} />
+                  </Suspense>
                   <Button
                     onClick={() => setShowNewProjectModal(true)}
                     className={cn(
@@ -195,22 +204,23 @@ function WorkspaceContent() {
               )}
 
               {/* Mode-Specific Content */}
-              {mode === 'plan' && (
+              {mode === 'plan' ? (
                 <PlanModeContent
                   projectLabState={projectLabState}
                   onUpdateState={handleUpdateProjectLabState}
                 />
-              )}
-
-              {mode === 'build' && (
+              ) : mode === 'build' ? (
                 <BuildModeContent
                   projectLabState={projectLabState}
                   onUpdateState={handleUpdateProjectLabState}
                 />
-              )}
-
-              {mode === 'preview' && (
+              ) : mode === 'preview' ? (
                 <PreviewModeContent projectLabState={projectLabState} />
+              ) : (
+                <PlanModeContent
+                  projectLabState={projectLabState}
+                  onUpdateState={handleUpdateProjectLabState}
+                />
               )}
 
               {/* Progress Bar for active renders */}
