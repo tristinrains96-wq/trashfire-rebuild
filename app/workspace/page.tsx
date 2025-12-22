@@ -108,18 +108,36 @@ function WorkspaceContent() {
     createDefaultProjectLabState()
   )
   const [mode, setMode] = useState<WorkspaceMode>('plan')
+  const [isClient, setIsClient] = useState(false)
+  const [authInitialized, setAuthInitialized] = useState(false)
   
-  // Load mode from localStorage on mount
+  const { isAuthenticated, setUser } = useAuth()
+  const router = useRouter()
+
+  // Initialize client and check demo mode
   useEffect(() => {
+    setIsClient(true)
+    
+    // Check if we're in demo mode and auto-authenticate
     if (typeof window !== 'undefined') {
+      try {
+        const { isDemoMode, DEMO_USER } = require('@/lib/demoAuth')
+        if (isDemoMode() && !isAuthenticated) {
+          setUser(DEMO_USER)
+        }
+      } catch (e) {
+        console.warn('Failed to load demo auth:', e)
+      }
+      
+      // Load mode from localStorage
       const saved = localStorage.getItem('workspace-mode')
       if (saved === 'plan' || saved === 'build' || saved === 'preview') {
         setMode(saved)
       }
+      
+      setAuthInitialized(true)
     }
-  }, [])
-  const { isAuthenticated } = useAuth()
-  const router = useRouter()
+  }, [isAuthenticated, setUser])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -132,19 +150,25 @@ function WorkspaceContent() {
   }
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (authInitialized && !isAuthenticated) {
       const signInUrl = getSignInUrl()
       router.push(`${signInUrl}?redirect_url=/workspace`)
     }
-  }, [isAuthenticated, router])
+  }, [isAuthenticated, router, authInitialized])
 
   const handleNewProject = (data: any) => {
     console.log('New project:', data)
     // TODO: Create project
   }
 
+  // Show loading while initializing
+  if (!isClient || !authInitialized) {
+    return <WorkspaceLoading />
+  }
+
+  // Show loading while redirecting if not authenticated
   if (!isAuthenticated) {
-    return null
+    return <WorkspaceLoading />
   }
 
   return (
