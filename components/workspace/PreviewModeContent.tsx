@@ -3,13 +3,19 @@
 import { Play, Lock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { ProjectLabState } from '@/lib/demo/projectLabTypes'
+import { ProjectLabState, SelectedTarget } from '@/lib/demo/projectLabTypes'
 
 interface PreviewModeContentProps {
   projectLabState: ProjectLabState
+  selected: SelectedTarget
+  onSelect: (target: SelectedTarget) => void
 }
 
-export default function PreviewModeContent({ projectLabState }: PreviewModeContentProps) {
+export default function PreviewModeContent({
+  projectLabState,
+  selected,
+  onSelect,
+}: PreviewModeContentProps) {
   const scenes = projectLabState.categories.scenes
   const compositions = projectLabState.sceneCompositions
 

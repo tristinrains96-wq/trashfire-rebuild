@@ -6,12 +6,14 @@ import { ChevronDown, Edit, Lock, Unlock, Users, MapPin, Package, Film, Mic, Boo
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { ProjectLabState, SlotItem, SlotCategory } from '@/lib/demo/projectLabTypes'
+import { ProjectLabState, SlotItem, SlotCategory, SelectedTarget } from '@/lib/demo/projectLabTypes'
 import SlotEditModal from './SlotEditModal'
 
 interface ProjectLabProps {
   projectLabState: ProjectLabState
   onUpdateState: (updates: Partial<ProjectLabState>) => void
+  selected: SelectedTarget
+  onSelect: (target: SelectedTarget) => void
 }
 
 const categoryIcons: Record<SlotCategory, typeof Users> = {
@@ -32,7 +34,12 @@ const categoryLabels: Record<SlotCategory, string> = {
   episode: 'Episode',
 }
 
-export default function ProjectLab({ projectLabState, onUpdateState }: ProjectLabProps) {
+export default function ProjectLab({
+  projectLabState,
+  onUpdateState,
+  selected,
+  onSelect,
+}: ProjectLabProps) {
   const [expandedCategories, setExpandedCategories] = useState<Set<SlotCategory>>(
     new Set<SlotCategory>(['characters', 'scenes'])
   )
@@ -206,19 +213,27 @@ export default function ProjectLab({ projectLabState, onUpdateState }: ProjectLa
                     className="overflow-hidden"
                   >
                     <div className="p-2 space-y-2">
-                      {slots.map((slot) => (
-                        <div
-                          key={slot.id}
-                          className={cn(
-                            'p-2 rounded border',
-                            'bg-[#0a0f15]/80',
-                            slot.status === 'empty'
-                              ? 'border-white/10'
-                              : slot.status === 'draft'
-                              ? 'border-[#00ffea]/30'
-                              : 'border-purple-500/30'
-                          )}
-                        >
+                      {slots.map((slot) => {
+                        const isSelected =
+                          selected?.kind === 'slot' &&
+                          selected.categoryId === category &&
+                          selected.slotId === slot.id
+                        return (
+                          <div
+                            key={slot.id}
+                            onClick={() => onSelect({ kind: 'slot', categoryId: category, slotId: slot.id })}
+                            className={cn(
+                              'p-2 rounded border cursor-pointer transition-all',
+                              'bg-[#0a0f15]/80',
+                              isSelected
+                                ? 'border-[#00ffea] bg-[#00ffea]/10 shadow-[0_0_10px_rgba(0,255,234,0.3)]'
+                                : slot.status === 'empty'
+                                ? 'border-white/10 hover:border-white/20'
+                                : slot.status === 'draft'
+                                ? 'border-[#00ffea]/30 hover:border-[#00ffea]/50'
+                                : 'border-purple-500/30 hover:border-purple-500/50'
+                            )}
+                          >
                           <div className="flex items-start justify-between gap-2 mb-2">
                             <div className="flex-1 min-w-0">
                               <h4 className="text-sm font-medium text-white truncate">
@@ -275,7 +290,8 @@ export default function ProjectLab({ projectLabState, onUpdateState }: ProjectLa
                             )}
                           </div>
                         </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   </motion.div>
                 )}

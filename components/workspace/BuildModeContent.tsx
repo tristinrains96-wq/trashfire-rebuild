@@ -5,14 +5,21 @@ import { Users, MapPin, Package, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import { ProjectLabState, SlotItem, SceneComposition } from '@/lib/demo/projectLabTypes'
+import { ProjectLabState, SlotItem, SceneComposition, SelectedTarget } from '@/lib/demo/projectLabTypes'
 
 interface BuildModeContentProps {
   projectLabState: ProjectLabState
   onUpdateState: (updates: Partial<ProjectLabState>) => void
+  selected: SelectedTarget
+  onSelect: (target: SelectedTarget) => void
 }
 
-export default function BuildModeContent({ projectLabState, onUpdateState }: BuildModeContentProps) {
+export default function BuildModeContent({
+  projectLabState,
+  onUpdateState,
+  selected,
+  onSelect,
+}: BuildModeContentProps) {
   const [draggedItem, setDraggedItem] = useState<{ id: string; category: string } | null>(null)
   const [hoveredScene, setHoveredScene] = useState<string | null>(null)
 
@@ -249,14 +256,34 @@ export default function BuildModeContent({ projectLabState, onUpdateState }: Bui
                     <div className="flex flex-wrap gap-1">
                       {composition.characterIds.map((charId) => {
                         const char = getAssetById(charId, 'characters')
+                        const isSelected =
+                          selected?.kind === 'scene' &&
+                          selected.sceneId === scene.id &&
+                          selected.assetRef.categoryId === 'characters' &&
+                          selected.assetRef.slotId === charId
                         return char ? (
                           <Badge
                             key={charId}
-                            className="bg-[#00ffea]/20 text-[#00ffea] border-[#00ffea]/30 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onSelect({
+                                kind: 'scene',
+                                sceneId: scene.id,
+                                assetRef: { categoryId: 'characters', slotId: charId },
+                              })
+                            }}
+                            className={cn(
+                              'bg-[#00ffea]/20 text-[#00ffea] border-[#00ffea]/30 text-xs cursor-pointer transition-all',
+                              isSelected &&
+                                'ring-2 ring-[#00ffea] shadow-[0_0_10px_rgba(0,255,234,0.5)]'
+                            )}
                           >
                             {char.title}
                             <button
-                              onClick={() => handleRemoveAsset(scene.id, 'character', charId)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRemoveAsset(scene.id, 'character', charId)
+                              }}
                               className="ml-1 hover:text-white"
                             >
                               <X className="h-3 w-3" />
@@ -294,11 +321,33 @@ export default function BuildModeContent({ projectLabState, onUpdateState }: Bui
                       {composition.locationId ? (
                         (() => {
                           const loc = getAssetById(composition.locationId, 'locations')
+                          const isSelected =
+                            selected?.kind === 'scene' &&
+                            selected.sceneId === scene.id &&
+                            selected.assetRef.categoryId === 'locations' &&
+                            selected.assetRef.slotId === composition.locationId
                           return loc ? (
-                            <Badge className="bg-[#00ffea]/20 text-[#00ffea] border-[#00ffea]/30 text-xs">
+                            <Badge
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onSelect({
+                                  kind: 'scene',
+                                  sceneId: scene.id,
+                                  assetRef: { categoryId: 'locations', slotId: composition.locationId! },
+                                })
+                              }}
+                              className={cn(
+                                'bg-[#00ffea]/20 text-[#00ffea] border-[#00ffea]/30 text-xs cursor-pointer transition-all',
+                                isSelected &&
+                                  'ring-2 ring-[#00ffea] shadow-[0_0_10px_rgba(0,255,234,0.5)]'
+                              )}
+                            >
                               {loc.title}
                               <button
-                                onClick={() => handleRemoveAsset(scene.id, 'location', composition.locationId!)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleRemoveAsset(scene.id, 'location', composition.locationId!)
+                                }}
                                 className="ml-1 hover:text-white"
                               >
                                 <X className="h-3 w-3" />
@@ -335,14 +384,34 @@ export default function BuildModeContent({ projectLabState, onUpdateState }: Bui
                     <div className="flex flex-wrap gap-1">
                       {composition.propIds.map((propId) => {
                         const prop = getAssetById(propId, 'props')
+                        const isSelected =
+                          selected?.kind === 'scene' &&
+                          selected.sceneId === scene.id &&
+                          selected.assetRef.categoryId === 'props' &&
+                          selected.assetRef.slotId === propId
                         return prop ? (
                           <Badge
                             key={propId}
-                            className="bg-[#00ffea]/20 text-[#00ffea] border-[#00ffea]/30 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onSelect({
+                                kind: 'scene',
+                                sceneId: scene.id,
+                                assetRef: { categoryId: 'props', slotId: propId },
+                              })
+                            }}
+                            className={cn(
+                              'bg-[#00ffea]/20 text-[#00ffea] border-[#00ffea]/30 text-xs cursor-pointer transition-all',
+                              isSelected &&
+                                'ring-2 ring-[#00ffea] shadow-[0_0_10px_rgba(0,255,234,0.5)]'
+                            )}
                           >
                             {prop.title}
                             <button
-                              onClick={() => handleRemoveAsset(scene.id, 'prop', propId)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleRemoveAsset(scene.id, 'prop', propId)
+                              }}
                               className="ml-1 hover:text-white"
                             >
                               <X className="h-3 w-3" />

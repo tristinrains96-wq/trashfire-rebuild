@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Plus, Play } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/store/auth'
-import { ProjectLabState } from '@/lib/demo/projectLabTypes'
+import { ProjectLabState, SelectedTarget } from '@/lib/demo/projectLabTypes'
 import { createDefaultProjectLabState } from '@/lib/demo/projectLabSeed'
 import type { WorkspaceMode } from '@/components/workspace/ModeSwitcher'
 
@@ -110,6 +110,7 @@ function WorkspaceContent() {
   const [mode, setMode] = useState<WorkspaceMode>('plan')
   const [isClient, setIsClient] = useState(false)
   const [authInitialized, setAuthInitialized] = useState(false)
+  const [selected, setSelected] = useState<SelectedTarget>(null)
   
   const { isAuthenticated, setUser } = useAuth()
   const router = useRouter()
@@ -187,9 +188,18 @@ function WorkspaceContent() {
             <ProjectLab
               projectLabState={projectLabState}
               onUpdateState={handleUpdateProjectLabState}
+              selected={selected}
+              onSelect={(target) => setSelected(target)}
             />
           }
-          rightPanel={<InspectorPanel />}
+          rightPanel={
+            <InspectorPanel
+              selected={selected}
+              projectLabState={projectLabState}
+              onUpdateState={handleUpdateProjectLabState}
+              onClearSelection={() => setSelected(null)}
+            />
+          }
           centerContent={
             <div className="h-full flex flex-col p-4">
               <div className="mb-4 flex items-center justify-between">
@@ -237,9 +247,15 @@ function WorkspaceContent() {
                 <BuildModeContent
                   projectLabState={projectLabState}
                   onUpdateState={handleUpdateProjectLabState}
+                  selected={selected}
+                  onSelect={(target) => setSelected(target)}
                 />
               ) : mode === 'preview' ? (
-                <PreviewModeContent projectLabState={projectLabState} />
+                <PreviewModeContent
+                  projectLabState={projectLabState}
+                  selected={selected}
+                  onSelect={(target) => setSelected(target)}
+                />
               ) : (
                 <PlanModeContent
                   projectLabState={projectLabState}
