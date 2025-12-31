@@ -16,6 +16,16 @@ node_modules
 # Misc
 .DS_Store
 *.pem
+*.key
+*.p12
+
+# Secrets and credentials
+**/secrets/
+**/*credentials*.json
+**/*service-account*.json
+**/*.pem
+**/*.key
+**/*.p12
 
 # Debug
 npm-debug.log*
