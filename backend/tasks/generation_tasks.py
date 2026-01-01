@@ -12,6 +12,7 @@ from backend.services.ffmpeg_service import FFmpegService
 from backend.services.piper_service import PiperService
 from backend.services.rhubarb_service import RhubarbService
 from backend.services.motion_service import MotionService
+from backend.services.episode_stitcher_service import EpisodeStitcherService
 from backend.utils.storage import R2Storage
 from backend.models.jobs import Job, JobStatus
 from backend.db.session import SessionLocal

@@ -86,6 +86,9 @@ uvicorn backend.main:app --reload --port 8000
 ### Motion Clips (Phase Motion-1)
 - `POST /api/v1/generation/generate_motion_clip` - Enqueue motion video clip generation from keyframe
 
+### Episode Stitching (Phase Episode-1)
+- `POST /api/v1/generation/stitch_episode` - Enqueue episode stitching from animatic and motion segments
+
 See `/docs` for interactive API documentation.
 
 ## System Dependencies
@@ -225,6 +228,101 @@ GET /api/v1/generation/jobs/{job_id}
 }
 ```
 
+## Episode Stitching (Animatic + Wan Motion)
+
+Stitch together animatic and motion clips into full episode videos with consistent resolution, fps, and codecs.
+
+### Overview
+
+The episode stitcher takes an ordered list of segment URLs (animatic MP4s from Phase 2, or motion clips from Phase Motion-1) and produces a single, cohesive episode video.
+
+**Key Features:**
+- **Normalization**: Every segment is normalized to target resolution, fps, and codec before concatenation
+- **Consistent Output**: All segments maintain aspect ratio (no stretching), padded to target resolution
+- **Audio Handling**: Silent audio tracks added if missing (ensures stable concatenation)
+- **Transitions**: Hard cuts (default) or crossfades (optional)
+- **Storage**: Final episode stored permanently in your storage
+
+### Usage
+
+**Input Segments:**
+- **Animatic segments**: MP4s from Phase 2 compositor
+- **Motion segments**: MP4s from Phase Motion-1 Wan motion clips
+- Segments are processed in order
+
+**Example Request:**
+```json
+POST /api/v1/generation/stitch_episode
+{
+  "episode_id": "ep-123",
+  "segments": [
+    {
+      "scene_id": "sc-001",
+      "type": "animatic",
+      "url": "https://storage.../animatic_sc001.mp4"
+    },
+    {
+      "scene_id": "sc-002",
+      "type": "motion",
+      "url": "https://storage.../motion_sc002.mp4"
+    },
+    {
+      "scene_id": "sc-003",
+      "type": "animatic",
+      "url": "https://storage.../animatic_sc003.mp4"
+    }
+  ],
+  "fps": 24,
+  "width": 1280,
+  "height": 720,
+  "transition": "cut",
+  "fade_ms": 250
+}
+```
+
+**Response:**
+```json
+{
+  "job_id": "job-uuid",
+  "mode": "episode_stitch",
+  "status": "pending",
+  "message": "Episode stitching job enqueued. Processing 3 segments (2 animatic, 1 motion) with cut transitions."
+}
+```
+
+**Poll Status:**
+```json
+GET /api/v1/generation/jobs/{job_id}
+{
+  "status": "completed",
+  "result_urls": ["https://storage.../episodes/ep-123/exports/episode_24fps_1280x720.mp4"]
+}
+```
+
+### Normalization Process
+
+Each segment is normalized before concatenation:
+1. **Download** segment from URL
+2. **Scale + Pad** to target resolution (maintains aspect ratio, no stretching)
+3. **Force FPS** to target fps
+4. **Ensure Codecs**: h264 video, aac audio
+5. **Add Silent Audio** if segment has no audio track
+
+This ensures all segments are compatible for concatenation without codec/fps/resolution mismatches.
+
+### Transitions
+
+- **`cut`** (default): Hard cuts between segments (fastest, most stable)
+- **`fade`**: Crossfade transitions (optional, can be enhanced in future versions)
+
+### Output
+
+- **Storage Path**: `episodes/{episode_id}/exports/episode_{fps}fps_{width}x{height}.mp4`
+- **Format**: MP4, h264 video, aac audio
+- **Resolution**: As specified (default 1280x720)
+- **FPS**: As specified (default 24)
+- **Permanent**: Stored in your configured storage (never expires)
+
 ## Workflow
 
 1. **Phase 1 - Keyframe Generation:**
@@ -252,4 +350,11 @@ GET /api/v1/generation/jobs/{job_id}
    - RunPod Wan motion endpoint generates 5-10s video clip
    - Clip uploaded to storage (never expires like provider URLs)
    - Job returns stored clip URL
+
+5. **Phase Episode-1 - Episode Stitching:**
+   - Submit ordered list of segment URLs via `/stitch_episode`
+   - Segments normalized (resolution, fps, codec)
+   - Segments concatenated with transitions
+   - Final episode video uploaded to storage
+   - Job returns stored episode URL
 

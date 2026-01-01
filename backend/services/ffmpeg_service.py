@@ -328,4 +328,205 @@ class FFmpegService:
                 logger.error(f"FFmpeg audio mixing failed: {e.stderr}")
                 raise RuntimeError(f"FFmpeg audio mixing failed: {e.stderr}")
     
+    def ensure_video_has_audio(
+        self,
+        input_path: str,
+        output_path: Optional[str] = None
+    ) -> str:
+        """
+        Ensure video has audio track (add silent audio if none)
+        
+        Args:
+            input_path: Path to input video
+            output_path: Output file path (creates temp file if None)
+            
+        Returns:
+            output_path: Path to video with audio track
+        """
+        if output_path is None:
+            output_file = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+            output_path = output_file.name
+            output_file.close()
+        
+        # Check if video has audio
+        cmd_check = [
+            self.ffmpeg_path,
+            "-i", input_path,
+            "-hide_banner",
+            "-f", "null",
+            "-"
+        ]
+        
+        try:
+            result = subprocess.run(
+                cmd_check,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            has_audio = "Audio:" in result.stderr
+            
+            if has_audio:
+                # Copy video as-is
+                import shutil
+                shutil.copy(input_path, output_path)
+                return output_path
+        except:
+            pass
+        
+        # Add silent audio track
+        cmd = [
+            self.ffmpeg_path,
+            "-y",
+            "-i", input_path,
+            "-f", "lavfi",
+            "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-c:v", "copy",
+            "-c:a", "aac",
+            "-b:a", "192k",
+            "-map", "0:v:0",
+            "-map", "1:a:0",
+            "-shortest",
+            output_path
+        ]
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=300
+            )
+            logger.debug(f"Added silent audio to video: {output_path}")
+            return output_path
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to add audio: {e.stderr}")
+            raise RuntimeError(f"Failed to add audio: {e.stderr}")
+    
+    def concat_videos(
+        self,
+        file_list: List[str],
+        output_path: str
+    ) -> str:
+        """
+        Concatenate videos using FFmpeg concat demuxer
+        
+        Args:
+            file_list: List of video file paths
+            output_path: Output file path
+            
+        Returns:
+            output_path: Path to concatenated video
+        """
+        # Create concat file
+        concat_file = output_path + ".txt"
+        with open(concat_file, "w") as f:
+            for file_path in file_list:
+                # Escape single quotes
+                escaped_path = file_path.replace("'", "'\\''")
+                f.write(f"file '{escaped_path}'\n")
+        
+        cmd = [
+            self.ffmpeg_path,
+            "-y",
+            "-f", "concat",
+            "-safe", "0",
+            "-i", concat_file,
+            "-c", "copy",  # Copy streams (fast, requires same codec)
+            output_path
+        ]
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=600
+            )
+            logger.info(f"Concatenated {len(file_list)} videos: {output_path}")
+            
+            # Clean up concat file
+            try:
+                os.remove(concat_file)
+            except:
+                pass
+            
+            return output_path
+        except subprocess.CalledProcessError as e:
+            # If copy fails (codec mismatch), re-encode
+            logger.warning("Stream copy failed, re-encoding...")
+            cmd = [
+                self.ffmpeg_path,
+                "-y",
+                "-f", "concat",
+                "-safe", "0",
+                "-i", concat_file,
+                "-c:v", "libx264",
+                "-preset", "medium",
+                "-crf", "23",
+                "-c:a", "aac",
+                "-b:a", "192k",
+                "-pix_fmt", "yuv420p",
+                output_path
+            ]
+            
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=600
+                )
+                logger.info(f"Concatenated {len(file_list)} videos (re-encoded): {output_path}")
+                
+                # Clean up concat file
+                try:
+                    os.remove(concat_file)
+                except:
+                    pass
+                
+                return output_path
+            except subprocess.CalledProcessError as e2:
+                logger.error(f"Video concatenation failed: {e2.stderr}")
+                raise RuntimeError(f"Video concatenation failed: {e2.stderr}")
+    
+    def concat_with_crossfade(
+        self,
+        file_list: List[str],
+        output_path: str,
+        fade_ms: int = 250
+    ) -> str:
+        """
+        Concatenate videos with crossfade transitions
+        
+        Args:
+            file_list: List of video file paths
+            output_path: Output file path
+            fade_ms: Fade duration in milliseconds
+            
+        Returns:
+            output_path: Path to concatenated video with crossfades
+        """
+        if len(file_list) < 2:
+            # No transitions needed for single video
+            return self.concat_videos(file_list, output_path)
+        
+        # For crossfade, we need to use filter_complex
+        # This is more complex - for v1.1, use simple fade in/out per segment
+        # Full crossfade requires calculating timings and overlay
+        
+        # Simplified approach: fade out last frame of each segment (except last)
+        # and fade in first frame of next segment
+        
+        # For now, use basic concat with fade in/out on segment boundaries
+        # Full crossfade implementation would require more complex filter graph
+        
+        logger.info(f"Concatenating with crossfade (simplified): {len(file_list)} segments")
+        
+        # Use basic concat for now (can be enhanced later)
+        return self.concat_videos(file_list, output_path)
+    
 

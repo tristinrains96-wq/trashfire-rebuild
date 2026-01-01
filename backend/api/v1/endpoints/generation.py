@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from backend.db.session import get_db
 from backend.models.jobs import Job, JobStatus
-from backend.tasks.generation_tasks import generate_sdxl_keyframes, compose_episode, voice_and_sync_episode, generate_motion_clip
+from backend.tasks.generation_tasks import generate_sdxl_keyframes, compose_episode, voice_and_sync_episode, generate_motion_clip, stitch_episode_video
 
 router = APIRouter()
 
@@ -79,6 +79,33 @@ class MotionClipGenerationResponse(BaseModel):
     """Response for motion clip generation request"""
     job_id: str = Field(..., description="Job ID")
     mode: str = Field(default="runpod_wan_motion", description="Generation mode")
+    status: str = Field(..., description="Job status")
+    message: str = Field(..., description="Status message")
+
+
+class EpisodeSegment(BaseModel):
+    """Episode segment data"""
+    scene_id: str = Field(..., description="Scene ID")
+    type: str = Field(..., description="Segment type: 'animatic' or 'motion'")
+    url: str = Field(..., description="URL to segment video")
+    label: Optional[str] = Field(default=None, description="Optional segment label")
+
+
+class EpisodeStitchRequest(BaseModel):
+    """Request body for episode stitching"""
+    episode_id: str = Field(..., description="Episode ID")
+    segments: List[EpisodeSegment] = Field(..., min_items=1, description="Ordered list of episode segments")
+    fps: int = Field(default=24, ge=12, le=60, description="Target FPS")
+    width: int = Field(default=1280, ge=256, le=1920, description="Target width")
+    height: int = Field(default=720, ge=256, le=1080, description="Target height")
+    transition: str = Field(default="cut", description="Transition type: 'cut' or 'fade'")
+    fade_ms: int = Field(default=250, ge=0, le=1000, description="Fade duration in milliseconds")
+
+
+class EpisodeStitchResponse(BaseModel):
+    """Response for episode stitching request"""
+    job_id: str = Field(..., description="Job ID")
+    mode: str = Field(default="episode_stitch", description="Generation mode")
     status: str = Field(..., description="Job status")
     message: str = Field(..., description="Status message")
 
@@ -327,6 +354,78 @@ async def generate_motion_clip_endpoint(
         )
 
 
+@router.post("/stitch_episode", response_model=EpisodeStitchResponse)
+async def stitch_episode_endpoint(
+    request: EpisodeStitchRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Enqueue episode stitching job
+    
+    Stitches together animatic and motion clips into final episode video.
+    Segments are normalized (resolution, fps, codec) then concatenated.
+    """
+    # Generate job ID
+    job_id = str(uuid.uuid4())
+    
+    # Create job record
+    job = Job(
+        id=job_id,
+        status=JobStatus.PENDING
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    
+    # Prepare segments for Celery task
+    segments_list = []
+    for segment in request.segments:
+        segments_list.append({
+            "scene_id": segment.scene_id,
+            "type": segment.type,
+            "url": segment.url,
+            "label": segment.label
+        })
+    
+    # Enqueue Celery task
+    try:
+        task = stitch_episode_video.delay(
+            episode_id=request.episode_id,
+            segments=segments_list,
+            fps=request.fps,
+            width=request.width,
+            height=request.height,
+            transition=request.transition,
+            fade_ms=request.fade_ms,
+            job_id=job_id
+        )
+        
+        # Update job with Celery task ID
+        job.celery_task_id = task.id
+        db.commit()
+        
+        animatic_count = sum(1 for s in segments_list if s["type"] == "animatic")
+        motion_count = sum(1 for s in segments_list if s["type"] == "motion")
+        
+        return EpisodeStitchResponse(
+            job_id=job_id,
+            mode="episode_stitch",
+            status="pending",
+            message=f"Episode stitching job enqueued. Processing {len(segments_list)} segments ({animatic_count} animatic, {motion_count} motion) with {request.transition} transitions."
+        )
+        
+    except Exception as e:
+        # Mark job as failed
+        job.status = JobStatus.FAILED
+        job.error_message = str(e)
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enqueue job: {str(e)}"
+        )
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(
     job_id: str,
@@ -339,6 +438,7 @@ async def get_job_status(
     For keyframe generation jobs: returns list of keyframe URLs.
     For animatic composition jobs: returns list with single video URL.
     For motion clip jobs: returns list with single clip URL.
+    For episode stitching jobs: returns list with single episode video URL.
     """
     job = db.query(Job).filter(Job.id == job_id).first()
     
