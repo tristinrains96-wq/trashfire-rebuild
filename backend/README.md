@@ -55,12 +55,15 @@ uvicorn backend.main:app --reload --port 8000
 ## RunPod Setup
 
 1. Create a RunPod account at https://www.runpod.io
-2. Create a serverless endpoint via dashboard:
-   - Template: Use SDXL with anime checkpoint (e.g., animagine-xl)
-   - Type: Queue-based serverless
-   - Copy the endpoint ID
+2. Create serverless endpoints via dashboard (queue-based serverless):
+   - **SDXL Endpoint**: Use SDXL with anime checkpoint (e.g., animagine-xl)
+   - **Wan Motion Endpoint**: Use Wan 2.2 TI2V-style model for motion generation
+   - Copy the endpoint IDs
 3. Get API key from user settings
-4. Add credentials to `.env`
+4. Add credentials to `.env`:
+   - `RUNPOD_API_KEY`
+   - `RUNPOD_SDXL_ENDPOINT_ID`
+   - `RUNPOD_WAN_MOTION_ENDPOINT_ID`
 
 ## Cloudflare R2 Setup
 
@@ -79,6 +82,9 @@ uvicorn backend.main:app --reload --port 8000
 
 ### Voiced Animatic (Phase 3)
 - `POST /api/v1/generation/generate_voiced_animatic` - Enqueue voiced animatic with TTS and lip-sync
+
+### Motion Clips (Phase Motion-1)
+- `POST /api/v1/generation/generate_motion_clip` - Enqueue motion video clip generation from keyframe
 
 See `/docs` for interactive API documentation.
 
@@ -145,12 +151,79 @@ Rhubarb is optional for lip-sync mouth shape generation. Install Rhubarb:
 
 - **FastAPI**: REST API server
 - **Celery**: Background task processing
-- **RunPod**: Serverless GPU for SDXL keyframe generation (Phase 1)
+- **RunPod**: Serverless GPU for SDXL keyframes (Phase 1) and motion clips (Phase Motion-1)
 - **FFmpeg**: Local video composition and audio mixing (Phase 2-3)
 - **Piper TTS**: Free, local text-to-speech (Phase 3)
 - **Rhubarb**: Free lip-sync mouth shape generation (Phase 3, optional)
-- **Cloudflare R2**: Persistent storage for keyframes, audio, and videos
+- **Cloudflare R2 / Supabase Storage**: Persistent storage for keyframes, audio, and videos
 - **PostgreSQL**: Job tracking and metadata
+
+## Open Motion Clips (RunPod Wan 2.2 TI2V)
+
+Generate true motion video clips (5-10 seconds) from keyframes using open models on RunPod.
+
+### Setup
+
+1. **Create RunPod Wan Motion Endpoint:**
+   - Go to RunPod dashboard
+   - Create new serverless endpoint (queue-based)
+   - Use Wan 2.2 TI2V-style template/model
+   - Copy the endpoint ID
+
+2. **Configure Environment:**
+   - Add `RUNPOD_WAN_MOTION_ENDPOINT_ID` to `.env`
+   - Ensure `RUNPOD_API_KEY` is set
+
+3. **Storage Configuration:**
+   - Set `STORAGE_PROVIDER` (r2 or supabase)
+   - Configure storage credentials
+   - Clips are stored under: `episodes/{episode_id}/scenes/{scene_id}/motion/{uuid}.mp4`
+
+### Usage
+
+**Clip Duration Limits:**
+- Minimum: 5 seconds (cost control)
+- Maximum: 10 seconds (cost control)
+- Default: 6 seconds
+
+**Output:**
+- Clips are automatically uploaded to your configured storage
+- Storage URLs never expire (unlike provider URLs)
+- Format: MP4, configurable resolution (default 1280x720)
+
+**Example Request:**
+```json
+POST /api/v1/generation/generate_motion_clip
+{
+  "episode_id": "ep-123",
+  "scene_id": "sc-001",
+  "keyframe_url": "https://r2.../keyframe.png",
+  "prompt": "character draws sword, dramatic wind, anime lighting",
+  "seconds": 6,
+  "fps": 24,
+  "width": 1280,
+  "height": 720
+}
+```
+
+**Response:**
+```json
+{
+  "job_id": "job-uuid",
+  "mode": "runpod_wan_motion",
+  "status": "pending",
+  "message": "Motion clip generation job enqueued..."
+}
+```
+
+**Poll Status:**
+```json
+GET /api/v1/generation/jobs/{job_id}
+{
+  "status": "completed",
+  "result_urls": ["https://storage.../motion/clip.mp4"]
+}
+```
 
 ## Workflow
 
@@ -173,4 +246,10 @@ Rhubarb is optional for lip-sync mouth shape generation. Install Rhubarb:
    - FFmpeg mixes audio into animatic video
    - Final voiced MP4 uploaded to R2 storage
    - Job returns final video URL
+
+4. **Phase Motion-1 - Open Motion Clips:**
+   - Submit keyframe URL and motion prompt via `/generate_motion_clip`
+   - RunPod Wan motion endpoint generates 5-10s video clip
+   - Clip uploaded to storage (never expires like provider URLs)
+   - Job returns stored clip URL
 

@@ -2,13 +2,13 @@
 FastAPI endpoints for keyframe generation
 """
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from backend.db.session import get_db
 from backend.models.jobs import Job, JobStatus
-from backend.tasks.generation_tasks import generate_sdxl_keyframes, compose_episode, voice_and_sync_episode
+from backend.tasks.generation_tasks import generate_sdxl_keyframes, compose_episode, voice_and_sync_episode, generate_motion_clip
 
 router = APIRouter()
 
@@ -59,6 +59,26 @@ class VoicedAnimaticGenerationRequest(BaseModel):
 class VoicedAnimaticGenerationResponse(BaseModel):
     """Response for voiced animatic generation request"""
     job_id: str = Field(..., description="Job ID")
+    status: str = Field(..., description="Job status")
+    message: str = Field(..., description="Status message")
+
+
+class MotionClipGenerationRequest(BaseModel):
+    """Request body for motion clip generation"""
+    episode_id: str = Field(..., description="Episode ID")
+    scene_id: str = Field(..., description="Scene ID")
+    keyframe_url: str = Field(..., description="URL to input keyframe image")
+    prompt: str = Field(..., description="Text prompt describing desired motion")
+    seconds: int = Field(default=6, ge=5, le=10, description="Clip duration in seconds (5-10)")
+    fps: int = Field(default=24, ge=12, le=60, description="Video FPS")
+    width: int = Field(default=1280, ge=256, le=1920, description="Video width")
+    height: int = Field(default=720, ge=256, le=1080, description="Video height")
+
+
+class MotionClipGenerationResponse(BaseModel):
+    """Response for motion clip generation request"""
+    job_id: str = Field(..., description="Job ID")
+    mode: str = Field(default="runpod_wan_motion", description="Generation mode")
     status: str = Field(..., description="Job status")
     message: str = Field(..., description="Status message")
 
@@ -248,6 +268,65 @@ async def generate_voiced_animatic(
         )
 
 
+@router.post("/generate_motion_clip", response_model=MotionClipGenerationResponse)
+async def generate_motion_clip_endpoint(
+    request: MotionClipGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Enqueue motion clip generation job
+    
+    Generates 5-10 second motion video clip from keyframe using RunPod Wan motion endpoint.
+    """
+    # Generate job ID
+    job_id = str(uuid.uuid4())
+    
+    # Create job record
+    job = Job(
+        id=job_id,
+        status=JobStatus.PENDING
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    
+    # Enqueue Celery task
+    try:
+        task = generate_motion_clip.delay(
+            episode_id=request.episode_id,
+            scene_id=request.scene_id,
+            keyframe_url=request.keyframe_url,
+            prompt=request.prompt,
+            seconds=request.seconds,
+            fps=request.fps,
+            width=request.width,
+            height=request.height,
+            job_id=job_id
+        )
+        
+        # Update job with Celery task ID
+        job.celery_task_id = task.id
+        db.commit()
+        
+        return MotionClipGenerationResponse(
+            job_id=job_id,
+            mode="runpod_wan_motion",
+            status="pending",
+            message=f"Motion clip generation job enqueued. Generating {request.seconds}s clip at {request.width}x{request.height}."
+        )
+        
+    except Exception as e:
+        # Mark job as failed
+        job.status = JobStatus.FAILED
+        job.error_message = str(e)
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enqueue job: {str(e)}"
+        )
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(
     job_id: str,
@@ -259,6 +338,7 @@ async def get_job_status(
     Returns current status, RunPod job ID, and result URLs if completed.
     For keyframe generation jobs: returns list of keyframe URLs.
     For animatic composition jobs: returns list with single video URL.
+    For motion clip jobs: returns list with single clip URL.
     """
     job = db.query(Job).filter(Job.id == job_id).first()
     

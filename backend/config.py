@@ -16,8 +16,17 @@ class Settings:
     # RunPod
     RUNPOD_API_KEY: Optional[str] = os.getenv("RUNPOD_API_KEY")
     RUNPOD_SDXL_ENDPOINT_ID: Optional[str] = os.getenv("RUNPOD_SDXL_ENDPOINT_ID")
+    RUNPOD_WAN_MOTION_ENDPOINT_ID: Optional[str] = os.getenv("RUNPOD_WAN_MOTION_ENDPOINT_ID")
     
-    # Cloudflare R2
+    # Storage (R2 or Supabase)
+    STORAGE_PROVIDER: str = os.getenv("STORAGE_PROVIDER", "r2")  # r2 or supabase
+    STORAGE_BUCKET: Optional[str] = os.getenv("STORAGE_BUCKET")
+    STORAGE_REGION: Optional[str] = os.getenv("STORAGE_REGION")
+    STORAGE_ACCESS_KEY: Optional[str] = os.getenv("STORAGE_ACCESS_KEY")
+    STORAGE_SECRET_KEY: Optional[str] = os.getenv("STORAGE_SECRET_KEY")
+    STORAGE_ENDPOINT_URL: Optional[str] = os.getenv("STORAGE_ENDPOINT_URL")
+    
+    # Cloudflare R2 (legacy, for backward compatibility)
     R2_ACCOUNT_ID: Optional[str] = os.getenv("R2_ACCOUNT_ID")
     R2_ACCESS_KEY_ID: Optional[str] = os.getenv("R2_ACCESS_KEY_ID")
     R2_SECRET_ACCESS_KEY: Optional[str] = os.getenv("R2_SECRET_ACCESS_KEY")
