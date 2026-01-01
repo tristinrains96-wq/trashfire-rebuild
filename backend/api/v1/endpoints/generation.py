@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from backend.db.session import get_db
 from backend.models.jobs import Job, JobStatus
-from backend.tasks.generation_tasks import generate_sdxl_keyframes, compose_episode
+from backend.tasks.generation_tasks import generate_sdxl_keyframes, compose_episode, voice_and_sync_episode
 
 router = APIRouter()
 
@@ -43,6 +43,21 @@ class AnimaticGenerationRequest(BaseModel):
 
 class AnimaticGenerationResponse(BaseModel):
     """Response for animatic generation request"""
+    job_id: str = Field(..., description="Job ID")
+    status: str = Field(..., description="Job status")
+    message: str = Field(..., description="Status message")
+
+
+class VoicedAnimaticGenerationRequest(BaseModel):
+    """Request body for voiced animatic generation"""
+    episode_id: str = Field(..., description="Episode ID")
+    dialogue_text: List[str] = Field(..., min_items=1, description="List of dialogue lines to voice")
+    animatic_video_url: str = Field(..., description="URL to Phase 2 animatic video")
+    keyframes_urls: List[str] = Field(..., min_items=1, description="List of keyframe URLs for lip-sync")
+
+
+class VoicedAnimaticGenerationResponse(BaseModel):
+    """Response for voiced animatic generation request"""
     job_id: str = Field(..., description="Job ID")
     status: str = Field(..., description="Job status")
     message: str = Field(..., description="Status message")
@@ -164,6 +179,61 @@ async def generate_animatic(
             job_id=job_id,
             status="pending",
             message=f"Animatic composition job enqueued. Processing {len(request.scene_data)} scenes with {total_keyframes} keyframes ({total_duration:.1f}s total)."
+        )
+        
+    except Exception as e:
+        # Mark job as failed
+        job.status = JobStatus.FAILED
+        job.error_message = str(e)
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enqueue job: {str(e)}"
+        )
+
+
+@router.post("/generate_voiced_animatic", response_model=VoicedAnimaticGenerationResponse)
+async def generate_voiced_animatic(
+    request: VoicedAnimaticGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Enqueue voiced animatic composition job
+    
+    Generates TTS audio using Piper, optionally syncs with Rhubarb lip-sync,
+    and mixes audio into Phase 2 animatic video using FFmpeg.
+    """
+    # Generate job ID
+    job_id = str(uuid.uuid4())
+    
+    # Create job record
+    job = Job(
+        id=job_id,
+        status=JobStatus.PENDING
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    
+    # Enqueue Celery task
+    try:
+        task = voice_and_sync_episode.delay(
+            episode_id=request.episode_id,
+            dialogue_text=request.dialogue_text,
+            animatic_video_url=request.animatic_video_url,
+            keyframes_urls=request.keyframes_urls,
+            job_id=job_id
+        )
+        
+        # Update job with Celery task ID
+        job.celery_task_id = task.id
+        db.commit()
+        
+        return VoicedAnimaticGenerationResponse(
+            job_id=job_id,
+            status="pending",
+            message=f"Voiced animatic composition job enqueued. Processing {len(request.dialogue_text)} dialogue lines with TTS and lip-sync."
         )
         
     except Exception as e:

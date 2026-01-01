@@ -77,11 +77,16 @@ uvicorn backend.main:app --reload --port 8000
 ### Animatic Composition (Phase 2)
 - `POST /api/v1/generation/generate_animatic` - Enqueue animatic video composition from keyframes
 
+### Voiced Animatic (Phase 3)
+- `POST /api/v1/generation/generate_voiced_animatic` - Enqueue voiced animatic with TTS and lip-sync
+
 See `/docs` for interactive API documentation.
 
-## FFmpeg Setup
+## System Dependencies
 
-FFmpeg is required for animatic composition (Phase 2). Install FFmpeg on your system:
+### FFmpeg (Required for Phase 2+)
+
+FFmpeg is required for animatic composition and audio mixing. Install FFmpeg on your system:
 
 **Windows:**
 ```bash
@@ -104,13 +109,47 @@ brew install ffmpeg
 
 The service will auto-detect FFmpeg in PATH. You can also specify a custom path via environment variable.
 
+### Piper TTS (Required for Phase 3)
+
+Piper TTS is required for free text-to-speech generation. Install Piper:
+
+**Download:**
+- Get Piper from: https://github.com/rhasspy/piper/releases
+- Or install via package manager if available
+
+**Voice Models:**
+- Download voice models from: https://huggingface.co/rhasspy/piper-voices
+- Recommended: `en_US-lessac-medium` (English, medium quality)
+- Place models in `~/.local/share/piper/voices/` or specify path
+
+**Example:**
+```bash
+# Download model
+mkdir -p ~/.local/share/piper/voices/en_US-lessac-medium
+cd ~/.local/share/piper/voices/en_US-lessac-medium
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+wget https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+```
+
+### Rhubarb Lip-Sync (Optional for Phase 3)
+
+Rhubarb is optional for lip-sync mouth shape generation. Install Rhubarb:
+
+**Download:**
+- Get Rhubarb from: https://github.com/DanielSWolf/rhubarb-lip-sync/releases
+- Extract and add to PATH
+
+**Note:** Full lip-sync requires mouth shape sprite assets (not included).
+
 ## Architecture
 
 - **FastAPI**: REST API server
 - **Celery**: Background task processing
 - **RunPod**: Serverless GPU for SDXL keyframe generation (Phase 1)
-- **FFmpeg**: Local video composition for animatic episodes (Phase 2)
-- **Cloudflare R2**: Persistent storage for keyframes and videos
+- **FFmpeg**: Local video composition and audio mixing (Phase 2-3)
+- **Piper TTS**: Free, local text-to-speech (Phase 3)
+- **Rhubarb**: Free lip-sync mouth shape generation (Phase 3, optional)
+- **Cloudflare R2**: Persistent storage for keyframes, audio, and videos
 - **PostgreSQL**: Job tracking and metadata
 
 ## Workflow
@@ -126,4 +165,12 @@ The service will auto-detect FFmpeg in PATH. You can also specify a custom path 
    - FFmpeg composes animatic video with effects
    - Final MP4 uploaded to R2 storage
    - Job returns video URL
+
+3. **Phase 3 - Voiced Animatic:**
+   - Submit dialogue text and animatic video URL via `/generate_voiced_animatic`
+   - Piper TTS generates audio for each dialogue line
+   - Optional: Rhubarb generates lip-sync mouth shapes
+   - FFmpeg mixes audio into animatic video
+   - Final voiced MP4 uploaded to R2 storage
+   - Job returns final video URL
 

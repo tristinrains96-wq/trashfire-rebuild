@@ -227,4 +227,105 @@ class FFmpegService:
         # Return as filter_complex with output label
         return f"[0:v]{filter_complex}[final]"
     
+    def add_audio_to_animatic(
+        self,
+        animatic_url: str,
+        audio_url: str,
+        output_path: Optional[str] = None
+    ) -> str:
+        """
+        Add audio track to animatic video
+        
+        Args:
+            animatic_url: URL or path to animatic video (MP4)
+            audio_url: URL or path to audio file (WAV/MP3)
+            output_path: Output file path (creates temp file if None)
+            
+        Returns:
+            output_path: Path to final video with audio
+            
+        Raises:
+            subprocess.CalledProcessError: If FFmpeg fails
+            FileNotFoundError: If video/audio cannot be downloaded
+        """
+        import shutil
+        
+        # Create temporary directory for working files
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Download video file
+            video_path = temp_path / "animatic.mp4"
+            try:
+                if animatic_url.startswith("http"):
+                    response = requests.get(animatic_url, timeout=60)
+                    response.raise_for_status()
+                    video_path.write_bytes(response.content)
+                else:
+                    # Assume local path
+                    shutil.copy(animatic_url, video_path)
+                
+                logger.info(f"Downloaded animatic video: {video_path}")
+            except Exception as e:
+                logger.error(f"Failed to download animatic: {e}")
+                raise FileNotFoundError(f"Could not download animatic: {e}")
+            
+            # Download audio file
+            audio_path = temp_path / "audio.wav"
+            try:
+                if audio_url.startswith("http"):
+                    response = requests.get(audio_url, timeout=60)
+                    response.raise_for_status()
+                    audio_path.write_bytes(response.content)
+                else:
+                    # Assume local path
+                    shutil.copy(audio_url, audio_path)
+                
+                logger.info(f"Downloaded audio: {audio_path}")
+            except Exception as e:
+                logger.error(f"Failed to download audio: {e}")
+                raise FileNotFoundError(f"Could not download audio: {e}")
+            
+            # Set output path
+            if output_path is None:
+                output_file = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+                output_path = output_file.name
+                output_file.close()
+            
+            # Build FFmpeg command to mix audio and video
+            # -i video -i audio -c:v copy -c:a aac -map 0:v:0 -map 1:a:0 -shortest
+            cmd = [
+                self.ffmpeg_path,
+                "-y",  # Overwrite output
+                "-i", str(video_path),
+                "-i", str(audio_path),
+                "-c:v", "copy",  # Copy video stream (no re-encode)
+                "-c:a", "aac",  # Encode audio as AAC
+                "-b:a", "192k",  # Audio bitrate
+                "-map", "0:v:0",  # Map video stream
+                "-map", "1:a:0",  # Map audio stream
+                "-shortest",  # End when shortest stream ends
+                output_path
+            ]
+            
+            logger.info(f"Mixing audio into animatic video...")
+            
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=300  # 5 min max
+                )
+                logger.info(f"Audio mixed into video: {output_path}")
+                return output_path
+                
+            except subprocess.TimeoutExpired:
+                logger.error("FFmpeg audio mixing timed out")
+                raise RuntimeError("Audio mixing timed out after 5 minutes")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"FFmpeg audio mixing failed: {e.stderr}")
+                raise RuntimeError(f"FFmpeg audio mixing failed: {e.stderr}")
+    
 

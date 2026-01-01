@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from backend.celery_app import celery_app
 from backend.services.runpod_service import RunPodService
 from backend.services.ffmpeg_service import FFmpegService
+from backend.services.piper_service import PiperService
+from backend.services.rhubarb_service import RhubarbService
 from backend.utils.storage import R2Storage
 from backend.models.jobs import Job, JobStatus
 from backend.db.session import SessionLocal
