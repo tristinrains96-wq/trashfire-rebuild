@@ -89,6 +89,9 @@ uvicorn backend.main:app --reload --port 8000
 ### Episode Stitching (Phase Episode-1)
 - `POST /api/v1/generation/stitch_episode` - Enqueue episode stitching from animatic and motion segments
 
+### Generate Episode Free (Phase Episode-2)
+- `POST /api/v1/generation/generate_episode_free` - One-button episode generation (full pipeline)
+
 See `/docs` for interactive API documentation.
 
 ## System Dependencies
@@ -323,6 +326,122 @@ This ensures all segments are compatible for concatenation without codec/fps/res
 - **FPS**: As specified (default 24)
 - **Permanent**: Stored in your configured storage (never expires)
 
+## Generate Episode Free (One Button)
+
+Automated episode generation pipeline that handles the entire workflow from scene prompts to final episode video.
+
+### Overview
+
+The "Generate Episode Free" endpoint automates the complete episode generation process:
+1. **Manifest Building**: Creates episode manifest with automatic motion selection
+2. **Keyframe Generation**: Generates SDXL keyframes for all scenes (parallel)
+3. **Animatic Generation**: Composes animatic videos for all scenes (parallel)
+4. **Motion Clips**: Generates Wan motion clips for selected scenes (parallel)
+5. **Episode Stitching**: Combines all segments into final episode
+6. **Voice Track**: Adds TTS voice if dialogue provided (optional)
+
+### Quality Presets
+
+- **`draft`**: 720p, 24fps, 0-10% motion scenes, 8 keyframes/scene
+- **`standard`**: 720p, 24fps, 10-20% motion scenes, 12 keyframes/scene
+- **`ultra_free`**: 1080p, 24fps, up to 30% motion scenes, 16 keyframes/scene
+
+### Automatic Motion Selection
+
+Motion clips are automatically selected for scenes with:
+- **Hero flag**: User marks scene as `"hero": true`
+- **Action keywords**: Prompt contains motion keywords (fight, run, jump, explosion, chase, transform, impact, etc.)
+
+Motion percentage is capped by preset to control costs.
+
+### Safety Caps
+
+- **Max scenes**: 30 per request
+- **Max duration**: 15 minutes total
+- **Motion percentage**: Capped by preset (10/20/30%)
+- **Motion clip duration**: Capped at 10 seconds per scene
+
+### Usage
+
+**Example Request:**
+```json
+POST /api/v1/generation/generate_episode_free
+{
+  "episode_id": "ep-123",
+  "quality_preset": "standard",
+  "scenes": [
+    {
+      "scene_id": "sc-001",
+      "prompt": "Character walks through forest, peaceful morning light",
+      "dialogue": "I wonder what lies ahead...",
+      "hero": false,
+      "duration_seconds": 20
+    },
+    {
+      "scene_id": "sc-002",
+      "prompt": "Character draws sword, dramatic wind, epic battle begins",
+      "dialogue": "This ends now!",
+      "hero": true,
+      "duration_seconds": 10
+    },
+    {
+      "scene_id": "sc-003",
+      "prompt": "Character stands victorious, sunset in background",
+      "dialogue": null,
+      "hero": false,
+      "duration_seconds": 15
+    }
+  ],
+  "transition": "cut",
+  "voice": true
+}
+```
+
+**Response:**
+```json
+{
+  "job_id": "job-uuid",
+  "mode": "episode_pipeline_free",
+  "status": "pending",
+  "message": "Episode generation pipeline enqueued. 3 scenes (2 animatic, 1 motion), 45s total, preset=standard."
+}
+```
+
+**Poll Status:**
+```json
+GET /api/v1/generation/jobs/{job_id}
+{
+  "status": "completed",
+  "result_urls": ["https://storage.../episodes/ep-123/exports/episode_24fps_1280x720.mp4"]
+}
+```
+
+### Manifest
+
+The system builds an episode manifest that tracks:
+- Scene specifications (prompts, durations, motion modes)
+- Generated outputs (keyframe URLs, animatic URLs, motion URLs)
+- Quality settings (resolution, fps, preset)
+
+Manifest is stored in the job record for reference.
+
+### Pipeline Stages
+
+1. **Keyframes** (Parallel): All scenes generate keyframes simultaneously
+2. **Animatics** (Parallel): All scenes compose animatics from keyframes
+3. **Motion** (Parallel): Selected scenes generate motion clips
+4. **Stitching**: All segments combined into episode
+5. **Voice** (Optional): TTS added if dialogue provided
+
+Each stage updates the manifest with outputs, which are used by subsequent stages.
+
+### Cost Control
+
+- Motion scenes are expensive (RunPod GPU time)
+- Presets limit motion percentage automatically
+- Hard caps prevent runaway costs
+- Early validation fails fast on invalid requests
+
 ## Workflow
 
 1. **Phase 1 - Keyframe Generation:**
@@ -357,4 +476,11 @@ This ensures all segments are compatible for concatenation without codec/fps/res
    - Segments concatenated with transitions
    - Final episode video uploaded to storage
    - Job returns stored episode URL
+
+6. **Phase Episode-2 - Generate Episode Free (One Button):**
+   - Submit scene list with prompts via `/generate_episode_free`
+   - System builds manifest with automatic motion selection
+   - Generates keyframes → animatics → motion clips (if needed) → stitches → voices (if dialogue)
+   - Complete episode video uploaded to storage
+   - Job returns final episode URL
 

@@ -25,6 +25,7 @@ celery_app.conf.update(
 
 # Include all task modules
 celery_app.conf.include = [
-    "backend.tasks.generation_tasks"
+    "backend.tasks.generation_tasks",
+    "backend.tasks.episode_pipeline_tasks"
 ]
 

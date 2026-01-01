@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 from backend.db.session import get_db
 from backend.models.jobs import Job, JobStatus
 from backend.tasks.generation_tasks import generate_sdxl_keyframes, compose_episode, voice_and_sync_episode, generate_motion_clip, stitch_episode_video
+from backend.tasks.episode_pipeline_tasks import run_episode_pipeline
+from backend.services.manifest_service import ManifestService
 
 router = APIRouter()
 
@@ -106,6 +108,33 @@ class EpisodeStitchResponse(BaseModel):
     """Response for episode stitching request"""
     job_id: str = Field(..., description="Job ID")
     mode: str = Field(default="episode_stitch", description="Generation mode")
+    status: str = Field(..., description="Job status")
+    message: str = Field(..., description="Status message")
+
+
+class SceneInput(BaseModel):
+    """Input scene data for episode generation"""
+    scene_id: str = Field(..., description="Scene ID")
+    prompt: str = Field(..., description="Scene description prompt")
+    dialogue: Optional[str] = Field(default=None, description="Optional dialogue line")
+    hero: bool = Field(default=False, description="Force wan_motion for this scene")
+    duration_seconds: int = Field(..., ge=1, le=300, description="Target scene duration")
+    keyframe_count: Optional[int] = Field(default=None, ge=4, le=30, description="Number of keyframes (auto if None)")
+
+
+class EpisodeGenerationRequest(BaseModel):
+    """Request body for free episode generation"""
+    episode_id: str = Field(..., description="Episode ID")
+    quality_preset: str = Field(default="standard", description="Quality preset: draft, standard, ultra_free")
+    scenes: List[SceneInput] = Field(..., min_items=1, max_items=30, description="List of scenes (max 30)")
+    transition: str = Field(default="cut", description="Transition type: cut or fade")
+    voice: bool = Field(default=False, description="Whether to add voice track")
+
+
+class EpisodeGenerationResponse(BaseModel):
+    """Response for episode generation request"""
+    job_id: str = Field(..., description="Job ID")
+    mode: str = Field(default="episode_pipeline_free", description="Generation mode")
     status: str = Field(..., description="Job status")
     message: str = Field(..., description="Status message")
 
@@ -423,6 +452,123 @@ async def stitch_episode_endpoint(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to enqueue job: {str(e)}"
+        )
+
+
+@router.post("/generate_episode_free", response_model=EpisodeGenerationResponse)
+async def generate_episode_free(
+    request: EpisodeGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    One-button episode generation (free pipeline)
+    
+    Automatically:
+    - Builds scene manifest with motion selection
+    - Generates keyframes per scene
+    - Generates animatics per scene
+    - Generates motion clips for selected scenes
+    - Stitches final episode
+    - Adds voice track if dialogue provided
+    
+    Safety caps:
+    - Max 30 scenes per request
+    - Max 15 minutes total duration
+    - Motion percentage capped by preset
+    """
+    # Safety caps
+    MAX_SCENES = 30
+    MAX_TOTAL_DURATION_SECONDS = 15 * 60  # 15 minutes
+    
+    if len(request.scenes) > MAX_SCENES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum {MAX_SCENES} scenes allowed per request"
+        )
+    
+    total_duration = sum(s.duration_seconds for s in request.scenes)
+    if total_duration > MAX_TOTAL_DURATION_SECONDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Maximum {MAX_TOTAL_DURATION_SECONDS // 60} minutes total duration allowed"
+        )
+    
+    # Build manifest
+    manifest_service = ManifestService()
+    
+    try:
+        scenes_input = [
+            {
+                "scene_id": s.scene_id,
+                "prompt": s.prompt,
+                "dialogue": s.dialogue,
+                "hero": s.hero,
+                "duration_seconds": s.duration_seconds,
+                "keyframe_count": s.keyframe_count
+            }
+            for s in request.scenes
+        ]
+        
+        manifest = manifest_service.build_manifest(
+            episode_id=request.episode_id,
+            scenes_input=scenes_input,
+            quality_preset=request.quality_preset,
+            transition=request.transition,
+            voice_enabled=request.voice
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    
+    # Generate job ID
+    job_id = str(uuid.uuid4())
+    
+    # Create job record
+    job = Job(
+        id=job_id,
+        status=JobStatus.PENDING
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    
+    # Enqueue pipeline task
+    try:
+        task = run_episode_pipeline.delay(
+            manifest_dict=manifest.to_dict(),
+            job_id=job_id
+        )
+        
+        # Update job with Celery task ID
+        job.celery_task_id = task.id
+        db.commit()
+        
+        motion_count = sum(1 for s in manifest.scenes if s.motion_mode == "wan_motion")
+        animatic_count = len(manifest.scenes) - motion_count
+        
+        return EpisodeGenerationResponse(
+            job_id=job_id,
+            mode="episode_pipeline_free",
+            status="pending",
+            message=(
+                f"Episode generation pipeline enqueued. "
+                f"{len(manifest.scenes)} scenes ({animatic_count} animatic, {motion_count} motion), "
+                f"{total_duration}s total, preset={request.quality_preset}."
+            )
+        )
+        
+    except Exception as e:
+        # Mark job as failed
+        job.status = JobStatus.FAILED
+        job.error_message = str(e)
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enqueue pipeline: {str(e)}"
         )
 
 
