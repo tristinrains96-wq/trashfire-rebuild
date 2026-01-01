@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from backend.db.session import get_db
 from backend.models.jobs import Job, JobStatus
-from backend.tasks.generation_tasks import generate_sdxl_keyframes
+from backend.tasks.generation_tasks import generate_sdxl_keyframes, compose_episode
 
 router = APIRouter()
 
@@ -24,6 +24,26 @@ class KeyframeGenerationRequest(BaseModel):
 class KeyframeGenerationResponse(BaseModel):
     """Response for keyframe generation request"""
     job_id: str = Field(..., description="Celery job ID")
+    status: str = Field(..., description="Job status")
+    message: str = Field(..., description="Status message")
+
+
+class SceneData(BaseModel):
+    """Scene data for animatic composition"""
+    keyframe_urls: List[str] = Field(..., min_items=1, description="List of keyframe URLs from Phase 1")
+    durations: List[float] = Field(..., min_items=1, description="List of durations in seconds for each keyframe")
+    effects: Optional[Dict[str, Any]] = Field(default=None, description="Optional effects (zoompan, colorgrade, etc.)")
+
+
+class AnimaticGenerationRequest(BaseModel):
+    """Request body for animatic generation"""
+    episode_id: str = Field(..., description="Episode ID")
+    scene_data: List[SceneData] = Field(..., min_items=1, description="List of scene data with keyframes and durations")
+
+
+class AnimaticGenerationResponse(BaseModel):
+    """Response for animatic generation request"""
+    job_id: str = Field(..., description="Job ID")
     status: str = Field(..., description="Job status")
     message: str = Field(..., description="Status message")
 
@@ -93,6 +113,71 @@ async def generate_keyframes(
         )
 
 
+@router.post("/generate_animatic", response_model=AnimaticGenerationResponse)
+async def generate_animatic(
+    request: AnimaticGenerationRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Enqueue animatic composition job
+    
+    Composes animatic-style episode video from Phase 1 keyframes using FFmpeg.
+    Creates a new job record and enqueues Celery task for video composition.
+    """
+    # Generate job ID
+    job_id = str(uuid.uuid4())
+    
+    # Create job record
+    job = Job(
+        id=job_id,
+        status=JobStatus.PENDING
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    
+    # Prepare scene data for Celery task
+    scene_data_list = []
+    for scene in request.scene_data:
+        scene_data_list.append({
+            "keyframe_urls": scene.keyframe_urls,
+            "durations": scene.durations,
+            "effects": scene.effects or {}
+        })
+    
+    # Enqueue Celery task
+    try:
+        task = compose_episode.delay(
+            episode_id=request.episode_id,
+            scene_data=scene_data_list,
+            job_id=job_id
+        )
+        
+        # Update job with Celery task ID
+        job.celery_task_id = task.id
+        db.commit()
+        
+        total_keyframes = sum(len(scene.keyframe_urls) for scene in request.scene_data)
+        total_duration = sum(sum(scene.durations) for scene in request.scene_data)
+        
+        return AnimaticGenerationResponse(
+            job_id=job_id,
+            status="pending",
+            message=f"Animatic composition job enqueued. Processing {len(request.scene_data)} scenes with {total_keyframes} keyframes ({total_duration:.1f}s total)."
+        )
+        
+    except Exception as e:
+        # Mark job as failed
+        job.status = JobStatus.FAILED
+        job.error_message = str(e)
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to enqueue job: {str(e)}"
+        )
+
+
 @router.get("/jobs/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(
     job_id: str,
@@ -102,7 +187,8 @@ async def get_job_status(
     Get job status and results
     
     Returns current status, RunPod job ID, and result URLs if completed.
-    Optionally polls RunPod if job is still in progress.
+    For keyframe generation jobs: returns list of keyframe URLs.
+    For animatic composition jobs: returns list with single video URL.
     """
     job = db.query(Job).filter(Job.id == job_id).first()
     

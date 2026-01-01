@@ -8,6 +8,7 @@ from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from backend.celery_app import celery_app
 from backend.services.runpod_service import RunPodService
+from backend.services.ffmpeg_service import FFmpegService
 from backend.utils.storage import R2Storage
 from backend.models.jobs import Job, JobStatus
 from backend.db.session import SessionLocal
@@ -182,6 +183,170 @@ def generate_sdxl_keyframes(
         
     except Exception as e:
         logger.error(f"Keyframe generation failed for scene {scene_id}: {e}")
+        
+        # Update job with error
+        if job:
+            job.status = JobStatus.FAILED
+            job.error_message = str(e)
+            db.commit()
+        
+        # Re-raise for Celery to handle
+        raise
+    
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="compose_episode")
+def compose_episode(
+    self,
+    episode_id: str,
+    scene_data: List[Dict[str, Any]],
+    job_id: str = None
+) -> Dict[str, Any]:
+    """
+    Compose animatic episode from keyframes using FFmpeg
+    
+    Args:
+        episode_id: Episode ID
+        scene_data: List of scene dictionaries, each containing:
+            - keyframe_urls: List of keyframe URLs (from Phase 1)
+            - durations: List of durations in seconds for each keyframe
+            - effects: Optional effects dictionary (zoompan, colorgrade, etc.)
+        job_id: Optional job ID (if None, generates new UUID)
+        
+    Returns:
+        result: Dictionary with status and final video URL
+    """
+    db: Session = SessionLocal()
+    
+    try:
+        # Create or get job record
+        if job_id is None:
+            job_id = str(uuid.uuid4())
+        
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if job is None:
+            job = Job(
+                id=job_id,
+                celery_task_id=self.request.id,
+                status=JobStatus.PENDING
+            )
+            db.add(job)
+        else:
+            job.celery_task_id = self.request.id
+            job.status = JobStatus.RUNNING
+        
+        db.commit()
+        
+        # Initialize FFmpeg service
+        try:
+            ffmpeg_service = FFmpegService()
+        except RuntimeError as e:
+            raise ValueError(f"FFmpeg not available: {e}")
+        
+        # Initialize R2 storage if configured
+        r2_storage = None
+        if all([
+            settings.R2_ACCOUNT_ID,
+            settings.R2_ACCESS_KEY_ID,
+            settings.R2_SECRET_ACCESS_KEY
+        ]):
+            r2_storage = R2Storage(
+                account_id=settings.R2_ACCOUNT_ID,
+                access_key_id=settings.R2_ACCESS_KEY_ID,
+                secret_access_key=settings.R2_SECRET_ACCESS_KEY,
+                bucket_name=settings.R2_BUCKET_NAME,
+                endpoint_url=settings.R2_ENDPOINT_URL
+            )
+        
+        # Collect all keyframes and durations from scenes
+        all_keyframes = []
+        all_durations = []
+        all_effects = []
+        
+        for scene_idx, scene in enumerate(scene_data):
+            keyframe_urls = scene.get("keyframe_urls", [])
+            durations = scene.get("durations", [])
+            effects = scene.get("effects", {})
+            
+            if len(keyframe_urls) != len(durations):
+                logger.warning(f"Scene {scene_idx}: Mismatch between {len(keyframe_urls)} keyframes and {len(durations)} durations")
+                # Pad with last duration or use default
+                if len(durations) < len(keyframe_urls):
+                    default_duration = durations[-1] if durations else 2.0
+                    durations.extend([default_duration] * (len(keyframe_urls) - len(durations)))
+                else:
+                    durations = durations[:len(keyframe_urls)]
+            
+            all_keyframes.extend(keyframe_urls)
+            all_durations.extend(durations)
+            
+            # Merge effects (use first scene's effects as base, or merge per-scene)
+            if not all_effects:
+                all_effects.append(effects)
+            else:
+                # For simplicity, use first scene's effects for entire episode
+                # In production, you might want per-scene effects
+                pass
+        
+        if not all_keyframes:
+            raise ValueError("No keyframes provided in scene_data")
+        
+        logger.info(f"Composing animatic for episode {episode_id}: {len(all_keyframes)} keyframes across {len(scene_data)} scenes")
+        
+        # Compose video using FFmpeg
+        # Use first scene's effects (or empty if none)
+        episode_effects = scene_data[0].get("effects", {}) if scene_data else {}
+        
+        try:
+            video_path = ffmpeg_service.compose_animatic(
+                keyframes_urls=all_keyframes,
+                durations=all_durations,
+                effects=episode_effects,
+                fps=24,
+                resolution=(1920, 1080)
+            )
+            
+            logger.info(f"Animatic composed: {video_path}")
+            
+            # Upload to R2
+            final_video_url = None
+            if r2_storage:
+                video_key = r2_storage.generate_episode_video_key(episode_id)
+                final_video_url = r2_storage.upload_video(video_path, video_key)
+                logger.info(f"Video uploaded to R2: {final_video_url}")
+                
+                # Clean up local file
+                try:
+                    os.remove(video_path)
+                except Exception as e:
+                    logger.warning(f"Failed to clean up local video file: {e}")
+            else:
+                # No R2 configured, use local path (temporary)
+                logger.warning("R2 not configured, using local video path")
+                final_video_url = video_path
+            
+            # Update job with results
+            job.status = JobStatus.COMPLETED
+            job.result_urls = [final_video_url]  # Store video URL
+            db.commit()
+            
+            logger.info(f"Episode composition completed for episode {episode_id}")
+            
+            return {
+                "job_id": job_id,
+                "status": "completed",
+                "video_url": final_video_url,
+                "episode_id": episode_id
+            }
+            
+        except Exception as e:
+            logger.error(f"FFmpeg composition failed: {e}")
+            raise
+        
+    except Exception as e:
+        logger.error(f"Episode composition failed for episode {episode_id}: {e}")
         
         # Update job with error
         if job:

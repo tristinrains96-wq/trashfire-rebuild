@@ -70,16 +70,60 @@ uvicorn backend.main:app --reload --port 8000
 
 ## API Endpoints
 
-- `POST /api/v1/generation/generate_keyframes` - Enqueue keyframe generation
-- `GET /api/v1/generation/jobs/{job_id}` - Get job status
+### Keyframe Generation (Phase 1)
+- `POST /api/v1/generation/generate_keyframes` - Enqueue SDXL keyframe generation
+- `GET /api/v1/generation/jobs/{job_id}` - Get job status and results
+
+### Animatic Composition (Phase 2)
+- `POST /api/v1/generation/generate_animatic` - Enqueue animatic video composition from keyframes
 
 See `/docs` for interactive API documentation.
+
+## FFmpeg Setup
+
+FFmpeg is required for animatic composition (Phase 2). Install FFmpeg on your system:
+
+**Windows:**
+```bash
+# Using Chocolatey
+choco install ffmpeg
+
+# Or download from https://ffmpeg.org/download.html
+```
+
+**Linux:**
+```bash
+sudo apt-get update
+sudo apt-get install ffmpeg
+```
+
+**macOS:**
+```bash
+brew install ffmpeg
+```
+
+The service will auto-detect FFmpeg in PATH. You can also specify a custom path via environment variable.
 
 ## Architecture
 
 - **FastAPI**: REST API server
 - **Celery**: Background task processing
-- **RunPod**: Serverless GPU for SDXL generation
-- **Cloudflare R2**: Persistent storage for generated keyframes
+- **RunPod**: Serverless GPU for SDXL keyframe generation (Phase 1)
+- **FFmpeg**: Local video composition for animatic episodes (Phase 2)
+- **Cloudflare R2**: Persistent storage for keyframes and videos
 - **PostgreSQL**: Job tracking and metadata
+
+## Workflow
+
+1. **Phase 1 - Keyframe Generation:**
+   - Submit prompts via `/generate_keyframes`
+   - RunPod generates SDXL anime keyframes
+   - Keyframes uploaded to R2 storage
+   - Job returns list of keyframe URLs
+
+2. **Phase 2 - Animatic Composition:**
+   - Submit keyframe URLs and durations via `/generate_animatic`
+   - FFmpeg composes animatic video with effects
+   - Final MP4 uploaded to R2 storage
+   - Job returns video URL
 

@@ -152,4 +152,56 @@ class R2Storage:
             key: S3 object key
         """
         return f"keyframes/{scene_id}/{prompt_index:04d}.{extension}"
+    
+    def upload_video(
+        self,
+        video_path: str,
+        key: str,
+        content_type: str = "video/mp4"
+    ) -> str:
+        """
+        Upload video file to R2
+        
+        Args:
+            video_path: Path to local video file
+            key: S3 object key (path in bucket)
+            content_type: MIME type of the video
+            
+        Returns:
+            public_url: Public URL of uploaded file
+        """
+        try:
+            with open(video_path, "rb") as video_file:
+                self.s3_client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=key,
+                    Body=video_file,
+                    ContentType=content_type
+                )
+            
+            # Construct public URL
+            public_url = f"https://{self.bucket_name}.r2.cloudflarestorage.com/{key}"
+            
+            logger.info(f"Uploaded video to R2: {key}")
+            return public_url
+            
+        except ClientError as e:
+            logger.error(f"Failed to upload video to R2: {e}")
+            raise
+        except FileNotFoundError as e:
+            logger.error(f"Video file not found: {video_path}")
+            raise
+    
+    def generate_episode_video_key(self, episode_id: str, extension: str = "mp4") -> str:
+        """
+        Generate S3 key for episode video
+        
+        Args:
+            episode_id: Episode ID
+            extension: File extension
+            
+        Returns:
+            key: S3 object key
+        """
+        return f"episodes/{episode_id}/animatic.{extension}"
 

@@ -23,3 +23,8 @@ celery_app.conf.update(
     task_soft_time_limit=3300,  # 55 min soft limit
 )
 
+# Include all task modules
+celery_app.conf.include = [
+    "backend.tasks.generation_tasks"
+]
+
